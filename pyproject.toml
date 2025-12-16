@@ -1,0 +1,80 @@
+[project]
+name = "geometricexpectileclustering"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "pre-commit>=4.5.0",
+    "ruff>=0.14.9",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+extend-exclude = [
+  ".venv",
+  "build",
+  "dist",
+]
+
+[tool.ruff.lint]
+# High-signal rules: errors, imports, bugbear, pyupgrade, some simplifications, etc.
+select = ["E", "F", "I", "B", "UP", "SIM", "C4", "A", "RUF", "PIE"]
+ignore = [
+  "E501", # let the formatter handle line length
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = 88
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+warn_return_any = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+
+# “Strict-ish” baseline
+strict_equality = true
+no_implicit_optional = true
+disallow_any_generics = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+# Optional (turn on later if you want max pain / max safety):
+# disallow_untyped_calls = true
+
+# Common excludes
+exclude = [
+  "^build/",
+  "^dist/",
+  "^\\.venv/",
+]
+
+# Relax typing in tests (common + sane)
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+# If you have a library with missing stubs, add an override like:
+# [[tool.mypy.overrides]]
+# module = ["some_untyped_lib.*"]
+# ignore_missing_imports = true
