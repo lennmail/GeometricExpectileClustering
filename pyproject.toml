@@ -1,35 +1,54 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "geometricexpectileclustering"
 version = "0.1.0"
-description = "Add your description here"
+description = "Geometric expectile clustering: a Lloyd-type algorithm extending K-means with directional asymmetry for Hilbert spaces"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "ipykernel>=7.2.0",
+    "matplotlib>=3.10.8",
     "numpy>=2.0.2",
+    "pytest>=9.0.2",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.16.3",
+    "scipy-stubs>=1.16.3.3",
 ]
 
 [dependency-groups]
 dev = [
+    "furo>=2025.12.19",
     "mypy>=1.19.0",
+    "myst-parser>=5.0.0",
+    "nbconvert>=7.17.0",
     "pre-commit>=4.5.0",
     "ruff>=0.14.9",
+    "sphinx>=9.1.0",
+    "sphinx-autodoc-typehints>=3.9.8",
+]
+test = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["geomexp*"]
+
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py312"
 extend-exclude = [
   ".venv",
   "build",
   "dist",
+  "notebooks/",
 ]
 
 [tool.ruff.lint]
-# High-signal rules: errors, imports, bugbear, pyupgrade, some simplifications, etc.
 select = ["E", "F", "I", "B", "UP", "SIM", "C4", "A", "RUF", "PIE"]
-ignore = [
-  "E501", # let the formatter handle line length
-]
 fixable = ["ALL"]
 
 [tool.ruff.lint.isort]
@@ -39,7 +58,7 @@ force-sort-within-sections = true
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
-docstring-code-line-length = 88
+docstring-code-line-length = 100
 
 [tool.mypy]
 python_version = "3.12"
@@ -50,7 +69,6 @@ warn_unused_ignores = true
 show_error_codes = true
 pretty = true
 
-# “Strict-ish” baseline
 strict_equality = true
 no_implicit_optional = true
 disallow_any_generics = true
@@ -58,23 +76,36 @@ check_untyped_defs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
-# Optional (turn on later if you want max pain / max safety):
-# disallow_untyped_calls = true
-
-# Common excludes
 exclude = [
   "^build/",
   "^dist/",
   "^\\.venv/",
+  "^docs/",
+  ".github/"
 ]
 
-# Relax typing in tests (common + sane)
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_untyped_defs = false
 check_untyped_defs = false
 
-# If you have a library with missing stubs, add an override like:
-# [[tool.mypy.overrides]]
-# module = ["some_untyped_lib.*"]
-# ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "pytest", "pytest.*", "_pytest.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--tb=short", "-q"]
+
+[tool.coverage.run]
+source = ["geomexp"]
+omit = ["geomexp/visualization/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

@@ -9,23 +9,26 @@ repos:
 
   - repo: local
     hooks:
-      # 1) Lint + autofix (must run BEFORE formatting when using --fix)
       - id: ruff-check
         name: ruff (lint)
         entry: uv run ruff check --fix
         language: system
         types_or: [python, pyi]
 
-      # 2) Format
       - id: ruff-format
         name: ruff (format)
         entry: uv run ruff format
         language: system
         types_or: [python, pyi]
 
-      # 3) Type check (run once for the whole project each commit)
       - id: mypy
         name: mypy
         entry: uv run mypy --config-file=pyproject.toml .
+        language: system
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest --no-header -q -x
         language: system
         pass_filenames: false

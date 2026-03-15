@@ -21,3 +21,13 @@ wheels/
 
 # editors
 .vscode/
+
+
+plots/
+results/
+docs/build/
+
+# Coverage
+htmlcov/
+.coverage
+coverage.svg
