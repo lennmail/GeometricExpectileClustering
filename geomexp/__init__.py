@@ -1,15 +1,10 @@
-"""Clustering algorithms module."""
+"""Geometric Expectile Clustering package."""
 
 from geomexp.clustering.clustering_algorithms import (
     GeometricExpectileClustering,
     KMeans,
 )
-from geomexp.clustering.clustering_base import (
-    BaseClusterer,
-    ClusterResult,
-    IterativeClusterer,
-    expectile_loss,
-)
+from geomexp.clustering.clustering_base import BaseClusterer, ClusterResult, expectile_loss
 from geomexp.clustering.geometry import (
     EuclideanGeometry,
     GramGeometry,
@@ -23,13 +18,14 @@ from geomexp.clustering.index_strategies import (
     GlobalIndexStrategy,
     IndexStrategy,
 )
-from geomexp.clustering.policies import (
-    EmptyClusterRule,
-    FarthestPointRule,
-    LowestIndexTieBreak,
-    RandomReinitRule,
-    RandomTieBreak,
-    TieBreakRule,
+from geomexp.kernels.kernels import (
+    Kernel,
+    KernelGeometricExpectileClustering,
+    KernelKMeans,
+    LinearKernel,
+    MaternKernel,
+    PolynomialKernel,
+    RBFKernel,
 )
 
 __all__ = [
@@ -38,20 +34,20 @@ __all__ = [
     "ClusterResult",
     "ClusterSpecificIndexStrategy",
     "CustomIndexStrategy",
-    "EmptyClusterRule",
     "EuclideanGeometry",
-    "FarthestPointRule",
     "GeometricExpectileClustering",
     "GlobalIndexStrategy",
     "GramGeometry",
     "HilbertGeometry",
     "IndexStrategy",
-    "IterativeClusterer",
     "KMeans",
-    "LowestIndexTieBreak",
-    "RandomReinitRule",
-    "RandomTieBreak",
-    "TieBreakRule",
+    "Kernel",
+    "KernelGeometricExpectileClustering",
+    "KernelKMeans",
+    "LinearKernel",
+    "MaternKernel",
+    "PolynomialKernel",
+    "RBFKernel",
     "WeightedEuclideanGeometry",
     "expectile_loss",
 ]
