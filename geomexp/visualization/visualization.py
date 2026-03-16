@@ -101,10 +101,19 @@ class PlotStyle:
         center_color: Colour of center markers.
         center_marker: Marker shape for centers.
         arrow_color: Colour of index vector arrows.
-        arrow_width: Width of index vector arrows.
+        arrow_linewidth: Line width of index vector arrows.
+        arrow_head_width: Head width of index vector arrows.
+        arrow_head_length: Head length of index vector arrows.
         arrow_scale: Multiplicative scaling applied to index vector arrows for visibility.
         contour_color: Colour of decision boundary lines.
         contour_linewidth: Line width of decision boundary contours.
+        contour_alpha: Opacity of decision boundary contour lines.
+        curve_linewidth: Line width of expectile level-set contours.
+        curve_alpha: Opacity of expectile level-set contour lines.
+        kde_color: Colour of KDE density contour lines.
+        kde_linewidth: Line width of KDE density contour lines.
+        kde_alpha: Opacity of KDE density contour lines.
+        loss_linewidth: Line width of loss function curves.
         decision_boundary_resolution: Grid resolution for boundary computation.
         decision_boundary_show_points: Whether to overlay data points on boundary plots.
         decision_boundary_show_contour_lines: Whether to draw boundary contour lines.
@@ -129,10 +138,19 @@ class PlotStyle:
     center_color: str = "black"
     center_marker: str = "o"
     arrow_color: str = "black"
-    arrow_width: float = 0.008
+    arrow_linewidth: float = 0.8
+    arrow_head_width: float = 0.15
+    arrow_head_length: float = 0.2
     arrow_scale: float = 1
     contour_color: str = "black"
     contour_linewidth: float = 0.5
+    contour_alpha: float = 0.9
+    curve_linewidth: float = 0.8
+    curve_alpha: float = 0.7
+    kde_color: str = "gray"
+    kde_linewidth: float = 0.4
+    kde_alpha: float = 0.6
+    loss_linewidth: float = 1.0
     decision_boundary_resolution: int = 300
     decision_boundary_show_points: bool = True
     decision_boundary_show_contour_lines: bool = True
@@ -253,7 +271,10 @@ class ClusterVisualizer:
         linewidth: float,
         color: str | None = None,
     ) -> None:
-        """Draw decision boundary lines as zero-sets of pairwise cost differences.
+        """Draw decision boundary lines via pairwise cost-difference contours.
+
+        For each pair of clusters that share an edge, a zero-level contour of their cost difference
+        is drawn, clipped to the region where one of the two clusters is closest.
 
         Args:
             ax: Matplotlib axes to draw on.
@@ -265,26 +286,25 @@ class ClusterVisualizer:
             color: Override boundary colour (``None`` uses ``self.style.contour_color``).
         """
         line_color = self.style.contour_color if color is None else color
-        sorted_costs = np.argsort(costs, axis=1)
-        best, second = sorted_costs[:, 0], sorted_costs[:, 1]
+        assignments = np.argmin(costs, axis=1).reshape(xx.shape)
 
-        for k in range(n_clusters):
-            for j in range(k + 1, n_clusters):
-                Z_diff = (costs[:, k] - costs[:, j]).reshape(xx.shape)
-                is_competing = (
-                    ((best == k) & (second == j)) | ((best == j) & (second == k))
-                ).reshape(xx.shape)
-                Z_masked = np.where(is_competing, Z_diff, np.nan)
-                if not (np.any(Z_masked[is_competing] < 0) and np.any(Z_masked[is_competing] > 0)):
+        for i in range(n_clusters):
+            for j in range(i + 1, n_clusters):
+                mask_i = assignments == i
+                mask_j = assignments == j
+                if not (mask_i.any() and mask_j.any()):
                     continue
+
+                diff = (costs[:, i] - costs[:, j]).reshape(xx.shape)
+                masked_diff = np.where(mask_i | mask_j, diff, np.nan)
                 ax.contour(
                     xx,
                     yy,
-                    Z_masked,
-                    levels=[0],
+                    masked_diff,
+                    levels=[0.0],
                     colors=line_color,
                     linewidths=linewidth,
-                    alpha=0.9,
+                    alpha=self.style.contour_alpha,
                 )
 
     def plot_cluster_assignments(
@@ -344,8 +364,11 @@ class ClusterVisualizer:
                         xy=(c[0] + u_k[0], c[1] + u_k[1]),
                         xytext=(c[0], c[1]),
                         arrowprops={
-                            "arrowstyle": "->,head_width=0.15,head_length=0.2",
-                            "lw": 0.8,
+                            "arrowstyle": (
+                                f"->,head_width={self.style.arrow_head_width}"
+                                f",head_length={self.style.arrow_head_length}"
+                            ),
+                            "lw": self.style.arrow_linewidth,
                             "color": self.style.arrow_color,
                             "shrinkA": 0,
                             "shrinkB": 0,
@@ -557,9 +580,9 @@ class ClusterVisualizer:
             yy,
             kde(np.vstack([xx.ravel(), yy.ravel()])).reshape(xx.shape),
             levels=levels,
-            colors="gray",
-            linewidths=0.4,
-            alpha=0.6,
+            colors=self.style.kde_color,
+            linewidths=self.style.kde_linewidth,
+            alpha=self.style.kde_alpha,
         )
 
         self._style_axes(ax, X, title, show_legend=False)
@@ -628,9 +651,9 @@ class ClusterVisualizer:
             yy,
             kde(np.vstack([xx.ravel(), yy.ravel()])).reshape(xx.shape),
             levels=kde_levels,
-            colors="gray",
-            linewidths=0.4,
-            alpha=0.6,
+            colors=self.style.kde_color,
+            linewidths=self.style.kde_linewidth,
+            alpha=self.style.kde_alpha,
         )
 
         grid_points = np.c_[xx.ravel(), yy.ravel()]
@@ -715,14 +738,22 @@ class ClusterVisualizer:
         norms = np.sqrt(rx**2 + ry**2)
         Z = 0.5 * (norms**2 + norms * (index_vector[0] * rx + index_vector[1] * ry))
 
-        ax.contour(xx, yy, Z, levels=cost_levels, colors=curve_color, linewidths=0.8, alpha=0.7)
+        ax.contour(
+            xx,
+            yy,
+            Z,
+            levels=cost_levels,
+            colors=curve_color,
+            linewidths=self.style.curve_linewidth,
+            alpha=self.style.curve_alpha,
+        )
         ax.scatter(
             center[0],
             center[1],
             facecolors="none",
             edgecolors=self.style.center_color,
             s=self.style.center_size,
-            marker="o",
+            marker=self.style.center_marker,
             zorder=10,
             linewidths=self.style.center_linewidth,
         )
@@ -733,8 +764,11 @@ class ClusterVisualizer:
                 xy=(center[0] + index_vector[0], center[1] + index_vector[1]),
                 xytext=(center[0], center[1]),
                 arrowprops={
-                    "arrowstyle": "->,head_width=0.15,head_length=0.2",
-                    "lw": 0.8,
+                    "arrowstyle": (
+                        f"->,head_width={self.style.arrow_head_width}"
+                        f",head_length={self.style.arrow_head_length}"
+                    ),
+                    "lw": self.style.arrow_linewidth,
                     "color": self.style.arrow_color,
                     "shrinkA": 0,
                     "shrinkB": 0,
@@ -789,7 +823,7 @@ class ClusterVisualizer:
                 loss_fn(x),
                 label=name,
                 color=self.style.color_palette[idx % len(self.style.color_palette)],
-                linewidth=1.0,
+                linewidth=self.style.loss_linewidth,
             )
 
         ax.axhline(y=0, color="black", linewidth=0.4, linestyle="--", alpha=0.3)
