@@ -16,6 +16,7 @@ dependencies = [
     "scikit-learn>=1.8.0",
     "scipy>=1.16.3",
     "scipy-stubs>=1.16.3.3",
+    "tqdm>=4.67.3",
 ]
 
 [dependency-groups]
