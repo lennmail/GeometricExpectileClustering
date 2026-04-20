@@ -9,13 +9,18 @@ description = "Geometric expectile clustering: a Lloyd-type algorithm extending 
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "h5netcdf>=1.8.1",
+    "h5py>=3.16.0",
     "ipykernel>=7.2.0",
     "matplotlib>=3.10.8",
     "numpy>=2.0.2",
+    "pandas>=3.0.2",
     "pytest>=9.0.2",
     "scikit-learn>=1.8.0",
     "scipy>=1.16.3",
     "scipy-stubs>=1.16.3.3",
+    "tqdm>=4.67.3",
+    "xarray>=2026.2.0",
 ]
 
 [dependency-groups]

@@ -1,7 +1,7 @@
 """Worker functions for ``simulation_study.ipynb`` parallelisation.
 
-Extracted into a separate module so that :class:`~concurrent.futures.ProcessPoolExecutor` (spawn
-start method on macOS) can pickle them.
+Extracted into a separate module so that :class:`~concurrent.futures.ProcessPoolExecutor` can pickle
+them.
 """
 
 from __future__ import annotations
@@ -380,3 +380,49 @@ def sweep_worker(
     """Unpack ``(seed, gen_fn, kwargs, param_value)`` and run one replication."""
     seed, gen_fn, kwargs, val = args
     return val, run_one_replication((seed, gen_fn, kwargs))
+
+
+def r_stability_worker(
+    args: tuple[int, Any, dict[str, Any], float, np.ndarray],
+) -> tuple[int, float, float, list[float]]:
+    """Worker for r-stability heatmap study.
+
+    Args: (seed, gen_fn, gen_kwargs, tau, r_grid)
+    Returns: (seed, tau, selected_r, miscl_errors)
+
+    For each (seed, tau):
+    1. Generate data with the given tau
+    2. Run adaptive tuning to get r_selected (once)
+    3. For each r in r_grid, fit GEC and record miscl error
+    """
+    seed, gen_fn, gen_kwargs, tau, r_grid = args
+    kwargs_with_tau = {**gen_kwargs, "tau": tau}
+    X, y_true = gen_fn(seed=seed, **kwargs_with_tau)
+
+    selected_r, _, _, _ = tune_r(X, K, N_RESTARTS, seed)
+
+    miscl_errors = []
+    for r_value in r_grid:
+        y_pred, _, _, _ = fit_gec(X, K, r_value, N_RESTARTS, seed)
+        miscl_errors.append(misclassification_error(y_true, y_pred))
+
+    return seed, tau, selected_r, miscl_errors
+
+
+def selected_r_lambda_worker(
+    args: tuple[int, Any, dict[str, Any], float, float],
+) -> tuple[int, float, float, float]:
+    """Worker for lightweight selected-*r* lambda overlays.
+
+    Args: (seed, gen_fn, gen_kwargs, tau, lam)
+    Returns: (seed, tau, lam, selected_r)
+
+    This is intentionally cheaper than ``r_stability_worker``:
+    it runs adaptive tuning once and does not sweep over an ``r_grid``.
+    """
+    seed, gen_fn, gen_kwargs, tau, lam = args
+    kwargs_with_tau = {**gen_kwargs, "tau": tau}
+    X, _ = gen_fn(seed=seed, **kwargs_with_tau)
+
+    selected_r, _, _, _ = tune_r(X, K, N_RESTARTS, seed, lam=lam)
+    return seed, tau, lam, selected_r

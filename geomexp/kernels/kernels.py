@@ -177,8 +177,13 @@ def _kmeanspp_feature_space(
             d2 = diag_K - 2 * gram[:, init_indices[j]] + diag_K[init_indices[j]]
             np.maximum(d2, 0, out=d2)
             np.minimum(min_dist_sq, d2, out=min_dist_sq)
-        probs = min_dist_sq / min_dist_sq.sum()
-        init_indices[k] = rng.choice(n, p=probs)
+        total = min_dist_sq.sum()
+        if not np.isfinite(total) or total <= 0:
+            remaining = np.setdiff1d(np.arange(n), init_indices[:k], assume_unique=False)
+            init_indices[k] = rng.choice(remaining)
+        else:
+            probs = min_dist_sq / total
+            init_indices[k] = rng.choice(n, p=probs)
 
     return init_indices
 
