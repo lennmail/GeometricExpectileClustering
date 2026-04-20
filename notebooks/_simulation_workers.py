@@ -1,7 +1,7 @@
 """Worker functions for ``simulation_study.ipynb`` parallelisation.
 
-Extracted into a separate module so that :class:`~concurrent.futures.ProcessPoolExecutor` (spawn
-start method on macOS) can pickle them.
+Extracted into a separate module so that :class:`~concurrent.futures.ProcessPoolExecutor` can pickle
+them.
 """
 
 from __future__ import annotations
