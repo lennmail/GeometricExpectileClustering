@@ -127,6 +127,9 @@ class FarthestPointRule(EmptyClusterRule):
     Distances are measured in the Hilbert geometry provided at construction (Euclidean by default).
     This tends to spread clusters apart and can help escape degenerate local optima more
     aggressively than random reinitialization.
+
+    When several clusters are empty they are seeded with successively farther points, so that no
+    two of them receive the same center.
     """
 
     def __init__(self, geometry: HilbertGeometry | None = None) -> None:
@@ -147,14 +150,16 @@ class FarthestPointRule(EmptyClusterRule):
     ) -> tuple[np.ndarray, np.ndarray]:
         centers = centers.copy()
         indices = indices.copy()
-        n_clusters = len(centers)
 
-        for k in range(n_clusters):
-            if np.sum(assignments == k) == 0:
-                assigned_centers = centers[assignments]
-                dists = self._geometry.norm(X - assigned_centers)
-                farthest = int(np.argmax(dists))
-                centers[k] = X[farthest]
-                indices[k] = 0
+        empty = [k for k in range(len(centers)) if np.sum(assignments == k) == 0]
+        if not empty:
+            return centers, indices
+
+        dists = self._geometry.norm(X - centers[assignments])
+        for k in empty:
+            farthest = int(np.argmax(dists))
+            centers[k] = X[farthest]
+            indices[k] = 0
+            dists[farthest] = -np.inf
 
         return centers, indices
