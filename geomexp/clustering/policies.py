@@ -155,7 +155,7 @@ class FarthestPointRule(EmptyClusterRule):
         if not empty:
             return centers, indices
 
-        dists = self._geometry.norm(X - centers[assignments])
+        dists = np.array(self._geometry.norm(X - centers[assignments]), dtype=np.float64)
         for k in empty:
             farthest = int(np.argmax(dists))
             centers[k] = X[farthest]
