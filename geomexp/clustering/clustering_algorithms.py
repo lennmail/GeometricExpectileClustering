@@ -352,9 +352,10 @@ class GeometricExpectileClustering(BaseClusterer):
             mask = assignments == k
             cluster_points = X[mask]
 
-            if len(cluster_points) <= 1:
-                if len(cluster_points) == 1:
-                    new_centers[k] = cluster_points[0]
+            if len(cluster_points) == 0:
+                continue
+            if len(cluster_points) == 1:
+                new_centers[k] = cluster_points[0]
                 continue
 
             c_k = new_centers[k].copy()

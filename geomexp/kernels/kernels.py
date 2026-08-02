@@ -494,6 +494,24 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             "prev_assignments": None,
         }
 
+    def _residual_norms(
+        self, center_weights_k: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute residual norms for one cluster, without touching the index vector.
+
+        Args:
+            center_weights_k: Centroid weight vector :math:`\\beta_k` of shape ``(n,)``.
+
+        Returns:
+            Tuple ``(Kb, d_sq, d)`` where :math:`Kb = K\\beta_k`, :math:`d_{ik}^2` is the squared
+            residual norm, and :math:`d_{ik}` its square root. ``Kb`` is returned so that callers
+            needing the index inner product can reuse it.
+        """
+        Kb = self._gram @ center_weights_k
+        d_sq = self._diag_K - 2 * Kb + float(center_weights_k @ Kb)
+        np.maximum(d_sq, 0, out=d_sq)
+        return Kb, d_sq, np.sqrt(d_sq)
+
     def _residual_quantities(
         self, center_weights_k: np.ndarray, index_weights_k: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -508,13 +526,9 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             residual norm, :math:`d_{ik}` the norm, and :math:`p_{ik}` the index-residual inner
             product.
         """
-        Kb = self._gram @ center_weights_k
-        bKb = float(center_weights_k @ Kb)
-        d_sq = self._diag_K - 2 * Kb + bKb
-        np.maximum(d_sq, 0, out=d_sq)
-
+        Kb, d_sq, d = self._residual_norms(center_weights_k)
         Ka = self._gram @ index_weights_k
-        return d_sq, np.sqrt(d_sq), Ka - float(index_weights_k @ Kb)
+        return d_sq, d, Ka - float(index_weights_k @ Kb)
 
     def _assign_by_distance(self, center_weights: np.ndarray) -> np.ndarray:
         """Assign points by squared feature-space distance (used for initialisation)."""
@@ -598,10 +612,11 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         for k in range(self.n_clusters):
             mask = assignments == k
             n_k = int(np.sum(mask))
-            if n_k <= 1:
-                if n_k == 1:
-                    new_cw[k] = 0
-                    new_cw[k, mask] = 1
+            if n_k == 0:
+                continue
+            if n_k == 1:
+                new_cw[k] = 0
+                new_cw[k, mask] = 1
                 continue
 
             beta = new_cw[k].copy()
@@ -623,13 +638,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         weight vector :math:`g_i = (\\beta - e_i)(1 + p_i / 2d_i) - d_i \\alpha / 2`. This
         method returns the mean over cluster members.
         """
-        Kb = self._gram @ beta
-        d_sq = self._diag_K - 2 * Kb + float(beta @ Kb)
-        np.maximum(d_sq, 0, out=d_sq)
-        d = np.sqrt(d_sq)
-
-        Ka = self._gram @ alpha
-        p = Ka - float(alpha @ Kb)
+        _, d, p = self._residual_quantities(beta, alpha)
 
         active = mask & (d > 1e-12)
         if not np.any(active):
@@ -663,7 +672,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             if not np.any(mask):
                 continue
 
-            _, d, _ = self._residual_quantities(center_weights[k], index_weights[k])
+            _, _, d = self._residual_norms(center_weights[k])
             delta = np.zeros(self._gram.shape[0])
             delta[mask] = d[mask]
             delta -= float(np.sum(d[mask])) * center_weights[k]
