@@ -123,10 +123,12 @@ def validate_weights(weights: object) -> np.ndarray:
 
 
 def validate_gram_matrix(G: object) -> np.ndarray:
-    """Validate a Gram matrix (must be square, 2-D, and positive semi-definite).
+    """Validate a Gram matrix (must be square, 2-D, symmetric, and positive semi-definite).
 
     Checks PSD by verifying that all eigenvalues are :math:`\\geq -\\epsilon` where
-    :math:`\\epsilon` is a small tolerance scaled by the matrix norm.
+    :math:`\\epsilon` is a small tolerance scaled by the matrix norm. Symmetry is checked first:
+    :func:`numpy.linalg.eigvalsh` reads only the lower triangle, so without it an asymmetric
+    matrix would pass the PSD check and then define a non-symmetric inner product.
 
     Args:
         G: Gram matrix, coerced via :func:`numpy.asarray`.
@@ -135,11 +137,14 @@ def validate_gram_matrix(G: object) -> np.ndarray:
         Validated 2-D ``float64`` array.
 
     Raises:
-        ValueError: If the matrix is not square, not 2-D, or not positive semi-definite.
+        ValueError: If the matrix is not square, not 2-D, not symmetric, or not positive
+            semi-definite.
     """
     arr = np.asarray(G, dtype=np.float64)
     if arr.ndim != 2 or arr.shape[0] != arr.shape[1]:
         raise ValueError(f"Gram Matrix must be square, got shape {arr.shape}")
+    if not np.allclose(arr, arr.T):
+        raise ValueError("Gram Matrix must be symmetric")
     eigvals = np.linalg.eigvalsh(arr)
     if float(eigvals.min()) < -1e-8 * max(float(np.abs(eigvals).max()), 1):
         raise ValueError("Gram Matrix must be positive semi-definite")

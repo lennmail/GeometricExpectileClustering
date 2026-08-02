@@ -217,6 +217,13 @@ class TestValidateGramMatrix:
         with pytest.raises(ValueError, match="square"):
             validate_gram_matrix(np.array([1.0, 2.0]))
 
+    def test_rejects_asymmetric(self):
+        # eigvalsh reads only the lower triangle, so this would otherwise pass the PSD check
+        # and go on to define a non-symmetric inner product.
+        G = np.array([[1.0, 5.0], [0.0, 1.0]])
+        with pytest.raises(ValueError, match="symmetric"):
+            validate_gram_matrix(G)
+
     def test_rejects_indefinite(self):
         # Matrix with eigenvalue -1
         G = np.array([[1.0, 0.0], [0.0, -1.0]])
