@@ -27,7 +27,12 @@ N_RESTARTS: int = 20
 
 
 def init_globals(k: int, n_restarts: int) -> None:
-    """Overwrite module-level constants from the notebook process initialiser."""
+    """Overwrite module-level constants from the notebook process initialiser.
+
+    Args:
+        k: Number of clusters used by every worker in this process.
+        n_restarts: Number of random restarts used by every worker in this process.
+    """
     global K, N_RESTARTS
     K = k
     N_RESTARTS = n_restarts
@@ -36,8 +41,12 @@ def init_globals(k: int, n_restarts: int) -> None:
 def make_basis(m: int) -> tuple[np.ndarray, np.ndarray]:
     """Build the four-term Fourier basis on an equispaced grid over :math:`[0, 1]`.
 
-    Returns ``(t, phi)`` where *t* has *m* points and *phi* has columns
-    :math:`\\sin(2\\pi t),\\; \\cos(2\\pi t),\\; \\sin(4\\pi t),\\; \\cos(4\\pi t)`.
+    Args:
+        m: Number of grid points.
+
+    Returns:
+        Tuple ``(t, phi)`` where ``t`` has *m* points and ``phi`` has shape ``(m, 4)`` with columns
+        :math:`\\sin(2\\pi t),\\; \\cos(2\\pi t),\\; \\sin(4\\pi t),\\; \\cos(4\\pi t)`.
     """
     t = np.linspace(0, 1, m)
     phi = np.column_stack(
@@ -56,6 +65,15 @@ def cluster_centers(n_clusters: int, p: int, R: float) -> tuple[np.ndarray, list
 
     Coordinates 1--2 lie on a circle of radius *R*; coordinates :math:`j \\ge 3` have amplitude
     :math:`R/2` with a phase shift of :math:`\\pi j / p`.
+
+    Args:
+        n_clusters: Number of centres to place.
+        p: Dimension of the coefficient space.
+        R: Radius of the circle carrying the leading two coordinates.
+
+    Returns:
+        Tuple ``(centers, angles)`` where ``centers`` has shape ``(n_clusters, p)`` and ``angles``
+        holds the cluster angle used for each centre.
     """
     angles = [2 * np.pi * k / n_clusters for k in range(n_clusters)]
     centers = np.zeros((n_clusters, p))
@@ -81,6 +99,18 @@ def generate_scenario1(
     Each cluster *k* draws coefficients from :math:`\\mathcal{N}(\\mu_k, \\Sigma_k)` where the
     leading 2x2 block of :math:`\\Sigma_k` is rotated by the cluster angle :math:`\\theta_k` with
     eigenvalues :math:`0.45^2` (radial) and :math:`0.12^2` (transverse).
+
+    Args:
+        seed: Seed for the data-generating random number generator.
+        K: Number of clusters.
+        n_per_cluster: Number of curves drawn per cluster.
+        m: Number of grid points per curve.
+        p: Dimension of the coefficient space.
+        R: Radius used to place the cluster centres.
+        sigma_eps: Standard deviation of the additive observation noise.
+
+    Returns:
+        Tuple ``(X, y_true)`` with curves of shape ``(K * n_per_cluster, m)`` and their labels.
     """
     rng = np.random.default_rng(seed)
     _, phi = make_basis(m)
@@ -124,6 +154,20 @@ def generate_scenario2(
     Each coefficient vector is :math:`c_i = \\mu_k + \\sigma_c \\eta_i + Z_i \\hat{d}_k` where
     :math:`\\eta_i \\sim \\mathcal{N}(0, I_p)` and :math:`Z_i \\sim \\mathrm{Exp}(\\tau)`.  The
     tail direction :math:`\\hat{d}_k` points from centre *k* toward centre *k + 1* cyclically.
+
+    Args:
+        seed: Seed for the data-generating random number generator.
+        K: Number of clusters.
+        n_per_cluster: Number of curves drawn per cluster.
+        m: Number of grid points per curve.
+        p: Dimension of the coefficient space.
+        R: Radius used to place the cluster centres.
+        sigma_c: Standard deviation of the isotropic coefficient spread.
+        tau: Scale of the exponential tail component.
+        sigma_eps: Standard deviation of the additive observation noise.
+
+    Returns:
+        Tuple ``(X, y_true)`` with curves of shape ``(K * n_per_cluster, m)`` and their labels.
     """
     rng = np.random.default_rng(seed)
     _, phi = make_basis(m)
@@ -166,6 +210,22 @@ def generate_scenario3(
     Each curve is :math:`X_i(t) = c_i \\Phi(t) + \\alpha A_i \\tilde{\\rho}_k(t) + \\varepsilon_i`
     where the amplitude :math:`A_i = \\sigma_a \\xi_i + Z_i` combines a Gaussian and an exponential
     component, and :math:`\\tilde{\\rho}_k` is a unit-:math:`L^2`-norm ramp with onset :math:`s_k`.
+
+    Args:
+        seed: Seed for the data-generating random number generator.
+        K: Number of clusters.
+        n_per_cluster: Number of curves drawn per cluster.
+        m: Number of grid points per curve.
+        p: Dimension of the coefficient space.
+        R: Radius used to place the cluster centres.
+        sigma_c: Standard deviation of the isotropic coefficient spread.
+        sigma_eps: Standard deviation of the additive observation noise.
+        tau: Scale of the exponential amplitude component.
+        sigma_a: Standard deviation of the Gaussian amplitude component.
+        ramp_scale: Multiplier applied to the ramp perturbation.
+
+    Returns:
+        Tuple ``(X, y_true)`` with curves of shape ``(K * n_per_cluster, m)`` and their labels.
     """
     rng = np.random.default_rng(seed)
     t, phi = make_basis(m)
@@ -203,7 +263,18 @@ def fit_kmeans(
     n_restarts: int,
     seed: int,
 ) -> tuple[np.ndarray, float, float]:
-    """Fit K-means with *n_restarts* random restarts, returning ``(labels, objective, elapsed)``."""
+    """Fit K-means with *n_restarts* random restarts, keeping the lowest-objective run.
+
+    Args:
+        X: Data array of shape ``(n_samples, n_features)``.
+        n_clusters: Number of clusters.
+        n_restarts: Number of restarts; restart *i* uses seed ``seed + i``.
+        seed: Base random seed.
+
+    Returns:
+        Tuple ``(labels, objective, elapsed)`` with the best run's assignments and objective, and
+        the wall-clock time spent over all restarts.
+    """
     t0 = time.perf_counter()
     best = None
     for trial in range(n_restarts):
@@ -223,7 +294,19 @@ def fit_gec(
     n_restarts: int,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, float, float]:
-    """Fit GEC with *r* and *n_restarts* restarts, returning ``(labels, centres, obj, elapsed)``."""
+    """Fit GEC with the given radius and number of restarts.
+
+    Args:
+        X: Data array of shape ``(n_samples, n_features)``.
+        n_clusters: Number of clusters.
+        r: Index radius :math:`r \\in [0, 1)`.
+        n_restarts: Number of restarts, passed through as ``n_init``.
+        seed: Base random seed.
+
+    Returns:
+        Tuple ``(labels, centres, objective, elapsed)`` for the best restart, with the wall-clock
+        time spent fitting.
+    """
     dim = X.shape[1]
     geom = WeightedEuclideanGeometry(np.ones(dim) / dim)
     gec = GeometricExpectileClustering(
@@ -257,9 +340,18 @@ def _asymmetry_statistic(
     2. Project residuals onto the skew direction :math:`d_k = s_k / \\|s_k\\|_H`.
     3. Compute the univariate skewness :math:`|\\gamma_k|` of the projected values.
 
-    Returns the population-weighted aggregate :math:`\\mathcal{A} = \\sum_k (n_k / n)|\\gamma_k|`.
     This avoids the curse-of-dimensionality problem of omnidirectional statistics by reducing each
-    cluster to a single informative direction first.
+    cluster to a single informative direction first. Clusters with fewer than five members, or with
+    a degenerate skew direction or spread, are skipped.
+
+    Args:
+        X: Data array of shape ``(n_samples, n_features)``.
+        centers: Cluster centres of shape ``(n_clusters, n_features)``.
+        assignments: Cluster labels of shape ``(n_samples,)``.
+        geom: Geometry supplying the norms and inner products.
+
+    Returns:
+        Population-weighted aggregate :math:`\\mathcal{A} = \\sum_k (n_k / n)|\\gamma_k|`.
     """
     n_clusters = len(centers)
     n = len(X)
@@ -305,7 +397,17 @@ def tune_r(
     3. Map via exponential saturation: :math:`r = r_{\\max}(1 - e^{-\\lambda \\mathcal{A}})`.
     4. Fit GEC with this *r*, recompute :math:`\\mathcal{A}`, update *r*.  Repeat *n_refine* times.
 
-    Returns ``(r, assignments, centres, elapsed)`` so the caller can reuse the last GEC fit.
+    Args:
+        X: Data array of shape ``(n_samples, n_features)``.
+        n_clusters: Number of clusters.
+        n_restarts: Number of restarts for each fit.
+        seed: Base random seed.
+        r_max: Upper bound of the saturation map; must stay below 1.
+        lam: Saturation rate :math:`\\lambda`.
+        n_refine: Number of refinement rounds after the initial estimate.
+
+    Returns:
+        Tuple ``(r, assignments, centres, elapsed)``, so the caller can reuse the last GEC fit.
     """
     dim = X.shape[1]
     geom = WeightedEuclideanGeometry(np.ones(dim) / dim)
@@ -348,7 +450,16 @@ def compute_metrics(
     labels: np.ndarray,
     runtime: float,
 ) -> dict[str, float]:
-    """Compute ARI, VI, misclassification error and store the wall-clock runtime."""
+    """Compute ARI, VI, misclassification error and store the wall-clock runtime.
+
+    Args:
+        y_true: Ground-truth labels.
+        labels: Predicted labels.
+        runtime: Wall-clock seconds to record alongside the metrics.
+
+    Returns:
+        Dict with keys ``"ari"``, ``"vi"``, ``"miscl"`` and ``"runtime"``.
+    """
     return {
         "ari": adjusted_rand_index(y_true, labels),
         "vi": variation_of_information(y_true, labels),
@@ -360,7 +471,16 @@ def compute_metrics(
 def run_one_replication(
     args: tuple[int, Any, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Run one MC replication: fit K-means and GEC (with auto-tuned *r*) on generated data."""
+    """Run one MC replication: fit K-means and GEC (with auto-tuned *r*) on generated data.
+
+    Args:
+        args: Tuple ``(mc_seed, generate_fn, gen_kwargs)``, packed into one argument so the
+            function can be mapped over a process pool.
+
+    Returns:
+        Dict with the per-method metric dicts under ``"kmeans"`` and ``"gec"``, plus the tuned
+        radius under ``"selected_r"``.
+    """
     mc_seed, generate_fn, gen_kwargs = args
     X, y_true = generate_fn(seed=mc_seed, **gen_kwargs)
 
@@ -377,7 +497,15 @@ def run_one_replication(
 def sweep_worker(
     args: tuple[int, Any, dict[str, Any], float],
 ) -> tuple[float, dict[str, Any]]:
-    """Unpack ``(seed, gen_fn, kwargs, param_value)`` and run one replication."""
+    """Unpack a sweep argument tuple and run one replication.
+
+    Args:
+        args: Tuple ``(seed, gen_fn, gen_kwargs, param_value)``.
+
+    Returns:
+        Tuple ``(param_value, replication_result)``, so the caller can group results by the swept
+        parameter.
+    """
     seed, gen_fn, kwargs, val = args
     return val, run_one_replication((seed, gen_fn, kwargs))
 
@@ -385,15 +513,17 @@ def sweep_worker(
 def r_stability_worker(
     args: tuple[int, Any, dict[str, Any], float, np.ndarray],
 ) -> tuple[int, float, float, list[float]]:
-    """Worker for r-stability heatmap study.
+    """Worker for the *r*-stability heatmap study.
 
-    Args: (seed, gen_fn, gen_kwargs, tau, r_grid)
-    Returns: (seed, tau, selected_r, miscl_errors)
+    For each ``(seed, tau)`` pair: generate data at that *tau*, run adaptive tuning once to obtain
+    the selected radius, then fit GEC at every radius on the grid and record its misclassification
+    error.
 
-    For each (seed, tau):
-    1. Generate data with the given tau
-    2. Run adaptive tuning to get r_selected (once)
-    3. For each r in r_grid, fit GEC and record miscl error
+    Args:
+        args: Tuple ``(seed, gen_fn, gen_kwargs, tau, r_grid)``.
+
+    Returns:
+        Tuple ``(seed, tau, selected_r, miscl_errors)``, with one error per radius in ``r_grid``.
     """
     seed, gen_fn, gen_kwargs, tau, r_grid = args
     kwargs_with_tau = {**gen_kwargs, "tau": tau}
@@ -414,11 +544,14 @@ def selected_r_lambda_worker(
 ) -> tuple[int, float, float, float]:
     """Worker for lightweight selected-*r* lambda overlays.
 
-    Args: (seed, gen_fn, gen_kwargs, tau, lam)
-    Returns: (seed, tau, lam, selected_r)
+    Intentionally cheaper than :func:`r_stability_worker`: it runs adaptive tuning once and does
+    not sweep over an ``r_grid``.
 
-    This is intentionally cheaper than ``r_stability_worker``:
-    it runs adaptive tuning once and does not sweep over an ``r_grid``.
+    Args:
+        args: Tuple ``(seed, gen_fn, gen_kwargs, tau, lam)``.
+
+    Returns:
+        Tuple ``(seed, tau, lam, selected_r)``.
     """
     seed, gen_fn, gen_kwargs, tau, lam = args
     kwargs_with_tau = {**gen_kwargs, "tau": tau}
