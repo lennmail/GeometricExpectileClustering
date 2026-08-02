@@ -51,7 +51,7 @@ class KMeans(IterativeClusterer):
         n_clusters: Number of clusters to form.
         max_iter: Maximum number of iterations.
         tol: Convergence tolerance on objective change.
-        random_state: Random seed for reproducibility.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -170,7 +170,7 @@ class GeometricExpectileClustering(BaseClusterer):
         tol: Convergence tolerance on objective change.
         center_lr: Learning rate for gradient descent on centers.
         center_steps: Number of gradient steps per centroid update.
-        random_state: Random seed.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -221,7 +221,7 @@ class GeometricExpectileClustering(BaseClusterer):
                 the center update uses the Hilbert gradient (natural gradient), this rate is
                 independent of grid resolution even for functional data.
             center_steps: Number of gradient steps per centroid update. Must be positive.
-            random_state: Random seed for reproducibility.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
         Raises:
             ValueError: If parameters are invalid.

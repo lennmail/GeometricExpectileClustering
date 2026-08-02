@@ -215,7 +215,7 @@ class KernelKMeans(BaseClusterer):
         n_init: Number of random restarts (best result is kept).
         max_iter: Maximum number of iterations.
         tol: Convergence tolerance.
-        random_state: Random seed.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -244,7 +244,7 @@ class KernelKMeans(BaseClusterer):
             n_init: Number of independent restarts. The run with the lowest objective is returned.
             max_iter: Maximum number of iterations per restart.
             tol: Convergence tolerance.
-            random_state: Random seed.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
         """
         super().__init__(
             n_clusters=n_clusters, max_iter=max_iter, tol=tol, random_state=random_state
@@ -408,7 +408,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         tol: Convergence tolerance on objective change.
         center_lr: Learning rate for gradient descent on centroid weights.
         center_steps: Number of gradient steps per centroid update.
-        random_state: Random seed.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -445,7 +445,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             tol: Convergence tolerance on objective change.
             center_lr: Learning rate for gradient descent on centroid weight vectors.
             center_steps: Number of gradient steps per centroid update.
-            random_state: Random seed for reproducibility.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
         Raises:
             ValueError: If parameters are invalid.

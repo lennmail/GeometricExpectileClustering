@@ -97,7 +97,7 @@ class BaseClusterer(ABC):
         n_clusters: Number of clusters to form.
         max_iter: Maximum number of iterations to perform.
         tol: Convergence tolerance for objective function change.
-        random_state: Random seed for reproducibility.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
     """
 
     def __init__(
@@ -113,7 +113,7 @@ class BaseClusterer(ABC):
             n_clusters: Number of clusters to form. Must be positive.
             max_iter: Maximum number of iterations. Must be positive.
             tol: Convergence tolerance on objective change. Must be non-negative.
-            random_state: Random seed for reproducibility.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
         Raises:
             TypeError: If ``n_clusters`` or ``max_iter`` are not integers.
@@ -175,7 +175,9 @@ class BaseClusterer(ABC):
     def _fit_best_of_restarts(self, X: np.ndarray, n_init: int) -> ClusterResult:
         """Run ``n_init`` independent restarts and keep the one with the lowest objective.
 
-        Restart ``i`` uses seed ``random_state + i`` (or ``i`` when ``random_state`` is ``None``).
+        Restart ``i`` uses seed ``random_state + i``. When ``random_state`` is ``None`` the base
+        seed is drawn from system entropy, so the run is not reproducible -- matching the
+        behaviour of ``random_state=None`` elsewhere in the library and in scikit-learn.
 
         Args:
             X: Validated data array of shape ``(n_samples, n_features)``.
@@ -184,7 +186,10 @@ class BaseClusterer(ABC):
         Returns:
             ClusterResult from the best restart.
         """
-        base_seed = self.random_state if self.random_state is not None else 0
+        base_seed = self.random_state
+        if base_seed is None:
+            base_seed = int(np.random.RandomState().randint(2**31))
+
         best_result: ClusterResult | None = None
 
         for trial in range(n_init):
