@@ -6,8 +6,7 @@ cluster shape analysis.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any, NotRequired, TypedDict
+from collections.abc import Callable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -19,21 +18,7 @@ from sklearn.metrics import (
     silhouette_score,
 )
 
-from geomexp.clustering.clustering_base import BaseClusterer, ClusterResult
-
-
-class MethodSpec(TypedDict):
-    """Specification of one clustering method for :func:`run_methods`.
-
-    Attributes:
-        name: Key under which the result is returned.
-        cls: Clusterer class to instantiate.
-        kwargs: Constructor keyword arguments, excluding ``random_state``.
-    """
-
-    name: str
-    cls: type[BaseClusterer]
-    kwargs: NotRequired[dict[str, Any]]
+from geomexp.clustering.clustering_base import BaseClusterer
 
 
 def adjusted_rand_index(y_true: NDArray[np.intp], y_pred: NDArray[np.intp]) -> float:
@@ -233,41 +218,3 @@ def misclassification_error(y_true: NDArray[np.intp], y_pred: NDArray[np.intp]) 
 
     row_ind, col_ind = linear_sum_assignment(cost)
     return float(1 + cost[row_ind, col_ind].sum() / len(y_true))
-
-
-def run_methods(
-    X: NDArray[np.float64],
-    methods: Sequence[MethodSpec],
-    n_inits: int = 20,
-    base_seed: int = 0,
-) -> dict[str, ClusterResult]:
-    """Fit several clustering methods, keeping the best-of-``n_inits`` run.
-
-    For each method the algorithm is re-initialised ``n_inits`` times (via ``random_state``) and
-    the run with the lowest objective is kept.
-
-    Args:
-        X: Data array.
-        methods: Method specifications; see :class:`MethodSpec`.
-        n_inits: Number of random restarts per method.
-        base_seed: Base random seed (incremented per restart).
-
-    Returns:
-        Dict mapping method name to its best ``ClusterResult``.
-    """
-    results: dict[str, ClusterResult] = {}
-
-    for spec in methods:
-        cls = spec["cls"]
-        kwargs = spec.get("kwargs", {})
-
-        best: ClusterResult | None = None
-        for trial in range(n_inits):
-            result = cls(**{**kwargs, "random_state": base_seed + trial}).fit(X)
-            if best is None or result.objective < best.objective:
-                best = result
-
-        assert best is not None
-        results[spec["name"]] = best
-
-    return results

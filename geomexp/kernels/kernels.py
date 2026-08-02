@@ -209,6 +209,10 @@ class KernelKMeans(BaseClusterer):
 
     With a linear kernel this recovers standard K-means.
 
+    Because the feature map has no explicit form, ``ClusterResult.centers`` holds the dual weight
+    vectors :math:`\\beta_k` of shape ``(n_clusters, n_samples)`` rather than points in input
+    space; the centroid is :math:`c_k = \\sum_j \\beta_{kj} \\varphi(X_j)`.
+
     Attributes:
         n_clusters: Number of clusters.
         kernel: Kernel function.
@@ -374,7 +378,6 @@ class KernelKMeans(BaseClusterer):
             objective=objective,
             n_iterations=n_iterations,
             converged=converged,
-            metadata={"center_weights": center_weights},
         )
 
 
@@ -398,6 +401,10 @@ class KernelGeometricExpectileClustering(BaseClusterer):
       :math:`p_{ik} = (K\\alpha_k)_i - \\alpha_k^\\top K \\beta_k`
 
     Setting :math:`r = 0` recovers kernel K-means.
+
+    As for :class:`KernelKMeans`, ``ClusterResult.centers`` holds the dual centroid weights
+    :math:`\\beta_k`; the dual index weights :math:`\\alpha_k` are returned under
+    ``ClusterResult.metadata["index_weights"]``.
 
     Attributes:
         n_clusters: Number of clusters.
@@ -733,5 +740,5 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             objective=objective,
             n_iterations=n_iterations,
             converged=converged,
-            metadata={"center_weights": center_weights, "index_weights": index_weights},
+            metadata={"index_weights": index_weights},
         )

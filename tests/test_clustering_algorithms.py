@@ -378,3 +378,25 @@ class TestRandomStateSemantics:
         first, second = run(), run()
         np.testing.assert_array_equal(first.assignments, second.assignments)
         np.testing.assert_allclose(first.centers, second.centers)
+
+
+class TestKMeansNInit:
+    def test_default_is_single_run(self):
+        assert KMeans(n_clusters=2).n_init == 1
+
+    def test_rejects_invalid(self):
+        with pytest.raises(ValueError, match="n_init"):
+            KMeans(n_clusters=2, n_init=0)
+
+    def test_picks_best_of_restarts(self, simple_2d):
+        best = KMeans(n_clusters=2, n_init=5, random_state=0).fit(simple_2d)
+        for trial in range(5):
+            single = KMeans(n_clusters=2, random_state=trial).fit(simple_2d)
+            assert best.objective <= single.objective + 1e-10
+
+    def test_single_init_matches_plain_fit(self, well_separated_2d):
+        """n_init=1 must reproduce the pre-existing single-run behaviour exactly."""
+        a = KMeans(n_clusters=3, random_state=42).fit(well_separated_2d)
+        b = KMeans(n_clusters=3, n_init=1, random_state=42).fit(well_separated_2d)
+        np.testing.assert_array_equal(a.assignments, b.assignments)
+        np.testing.assert_allclose(a.centers, b.centers)

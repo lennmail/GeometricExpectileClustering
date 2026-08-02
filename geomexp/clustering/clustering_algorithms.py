@@ -49,6 +49,7 @@ class KMeans(IterativeClusterer):
 
     Attributes:
         n_clusters: Number of clusters to form.
+        n_init: Number of random restarts (best result is kept).
         max_iter: Maximum number of iterations.
         tol: Convergence tolerance on objective change.
         random_state: Random seed for reproducibility; ``None`` draws from system entropy.
@@ -65,13 +66,42 @@ class KMeans(IterativeClusterer):
     def __init__(
         self,
         n_clusters: int,
+        n_init: int = 1,
         max_iter: int = 100,
         tol: float = 1e-4,
         random_state: int | None = None,
     ) -> None:
+        """Initialize the K-means clusterer.
+
+        Args:
+            n_clusters: Number of clusters to form. Must be positive.
+            n_init: Number of independent restarts with different random seeds. The run with the
+                lowest objective is returned. Defaults to a single run, unlike
+                :class:`GeometricExpectileClustering`, whose non-convex objective benefits more
+                from restarts.
+            max_iter: Maximum number of iterations per restart. Must be positive.
+            tol: Convergence tolerance on objective change. Must be non-negative.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
+
+        Raises:
+            ValueError: If parameters are invalid.
+        """
+        validate_positive_int(n_init, "n_init")
         super().__init__(
             n_clusters=n_clusters, max_iter=max_iter, tol=tol, random_state=random_state
         )
+        self.n_init = n_init
+
+    def fit(self, X: np.ndarray) -> ClusterResult:
+        """Fit K-means, keeping the best of ``n_init`` random restarts.
+
+        Args:
+            X: Data array of shape ``(n_samples, n_features)``.
+
+        Returns:
+            ClusterResult from the best restart.
+        """
+        return self._fit_best_of_restarts(self._validate_input(X), self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize state with random centers and Euclidean assignment."""
