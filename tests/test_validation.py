@@ -5,6 +5,8 @@ import pytest
 
 from geomexp.utils.validation import (
     validate_data_array,
+    validate_direction_matrix,
+    validate_direction_vector,
     validate_gram_matrix,
     validate_index_radius,
     validate_n_clusters,
@@ -190,6 +192,25 @@ class TestValidateWeights:
     def test_rejects_negative_entry(self):
         with pytest.raises(ValueError, match="positive"):
             validate_weights(np.array([1.0, -0.5, 2.0]))
+
+
+# --- validate_direction_vector / validate_direction_matrix ---
+
+
+class TestValidateDirections:
+    def test_vector_accepts_1d(self):
+        assert validate_direction_vector([1, 0]).shape == (2,)
+
+    def test_vector_rejects_2d(self):
+        with pytest.raises(ValueError, match="1-D"):
+            validate_direction_vector(np.zeros((2, 2)))
+
+    def test_matrix_accepts_2d(self):
+        assert validate_direction_matrix([[1, 0], [0, 1]]).shape == (2, 2)
+
+    def test_matrix_rejects_1d(self):
+        with pytest.raises(ValueError, match="2-D"):
+            validate_direction_matrix(np.array([1.0, 0.0]))
 
 
 # --- validate_gram_matrix ---

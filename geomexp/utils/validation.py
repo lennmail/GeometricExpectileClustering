@@ -122,6 +122,44 @@ def validate_weights(weights: object) -> np.ndarray:
     return w
 
 
+def validate_direction_vector(direction: object) -> np.ndarray:
+    """Validate a single index direction vector.
+
+    Args:
+        direction: Direction array, coerced via :func:`numpy.asarray`.
+
+    Returns:
+        Validated 1-D ``float64`` array.
+
+    Raises:
+        ValueError: If the array is not 1-D.
+    """
+    arr = np.asarray(direction, dtype=np.float64)
+    if arr.ndim != 1:
+        raise ValueError(f"Direction must be 1-D of shape (n_features,), got {arr.ndim}-D")
+    return arr
+
+
+def validate_direction_matrix(directions: object) -> np.ndarray:
+    """Validate per-cluster index direction vectors.
+
+    Args:
+        directions: Direction array, coerced via :func:`numpy.asarray`.
+
+    Returns:
+        Validated 2-D ``float64`` array.
+
+    Raises:
+        ValueError: If the array is not 2-D.
+    """
+    arr = np.asarray(directions, dtype=np.float64)
+    if arr.ndim != 2:
+        raise ValueError(
+            f"Directions must be 2-D of shape (n_clusters, n_features), got {arr.ndim}-D"
+        )
+    return arr
+
+
 def validate_gram_matrix(G: object) -> np.ndarray:
     """Validate a Gram matrix (must be square, 2-D, symmetric, and positive semi-definite).
 
