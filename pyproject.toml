@@ -95,7 +95,7 @@ disallow_untyped_defs = false
 check_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "pytest", "pytest.*", "_pytest.*"]
+module = ["sklearn.*", "pytest", "_pytest.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

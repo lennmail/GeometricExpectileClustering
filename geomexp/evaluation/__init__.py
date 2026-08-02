@@ -1,6 +1,7 @@
 """Evaluation utilities for clustering experiments."""
 
 from geomexp.evaluation.metrics import (
+    MethodSpec,
     adjusted_rand_index,
     davies_bouldin,
     misclassification_error,
@@ -13,6 +14,7 @@ from geomexp.evaluation.metrics import (
 )
 
 __all__ = [
+    "MethodSpec",
     "adjusted_rand_index",
     "davies_bouldin",
     "misclassification_error",

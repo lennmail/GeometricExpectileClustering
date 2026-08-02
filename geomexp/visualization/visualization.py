@@ -150,7 +150,7 @@ class PlotStyle:
     kde_color: str = "gray"
     kde_linewidth: float = 0.4
     kde_alpha: float = 0.6
-    loss_linewidth: float = 1.0
+    loss_linewidth: float = 1
     decision_boundary_resolution: int = 300
     decision_boundary_show_points: bool = True
     decision_boundary_show_contour_lines: bool = True
@@ -301,7 +301,7 @@ class ClusterVisualizer:
                     xx,
                     yy,
                     masked_diff,
-                    levels=[0.0],
+                    levels=[0],
                     colors=line_color,
                     linewidths=linewidth,
                     alpha=self.style.contour_alpha,
@@ -699,7 +699,7 @@ class ClusterVisualizer:
         title: str | None = None,
         show_index_arrow: bool = True,
         curve_color: str | None = None,
-        extent: float = 3.0,
+        extent: float = 3,
         resolution: int = 300,
     ) -> Figure:
         """Plot level curves of the expectile loss around a single center.
@@ -728,7 +728,7 @@ class ClusterVisualizer:
             assert self.style.color_palette is not None
             curve_color = self.style.color_palette[0]
         if cost_levels is None:
-            cost_levels = np.linspace(0.5, 3.0, 8)
+            cost_levels = np.linspace(0.5, 3, 8)
 
         xx, yy = np.meshgrid(
             np.linspace(center[0] - extent, center[0] + extent, resolution),

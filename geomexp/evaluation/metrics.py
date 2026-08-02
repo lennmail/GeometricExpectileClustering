@@ -6,7 +6,8 @@ cluster shape analysis.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from typing import Any, NotRequired, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,7 +19,21 @@ from sklearn.metrics import (
     silhouette_score,
 )
 
-from geomexp.clustering.clustering_base import ClusterResult
+from geomexp.clustering.clustering_base import BaseClusterer, ClusterResult
+
+
+class MethodSpec(TypedDict):
+    """Specification of one clustering method for :func:`run_methods`.
+
+    Attributes:
+        name: Key under which the result is returned.
+        cls: Clusterer class to instantiate.
+        kwargs: Constructor keyword arguments, excluding ``random_state``.
+    """
+
+    name: str
+    cls: type[BaseClusterer]
+    kwargs: NotRequired[dict[str, Any]]
 
 
 def adjusted_rand_index(y_true: NDArray[np.intp], y_pred: NDArray[np.intp]) -> float:
@@ -81,7 +96,7 @@ def davies_bouldin(X: NDArray[np.float64], labels: NDArray[np.intp]) -> float:
 
 def stability_score(
     X: NDArray[np.float64],
-    clusterer_factory: Callable[[], object],
+    clusterer_factory: Callable[[], BaseClusterer],
     n_resamples: int = 20,
     subsample_frac: float = 0.8,
     rng: np.random.Generator | None = None,
@@ -93,8 +108,7 @@ def stability_score(
 
     Args:
         X: Data array of shape ``(n_samples, n_features)``.
-        clusterer_factory: Zero-argument callable returning a fresh clusterer instance (must have
-            a ``.fit(X)`` method returning a ``ClusterResult``).
+        clusterer_factory: Zero-argument callable returning a fresh clusterer instance.
         n_resamples: Number of bootstrap resamples.
         subsample_frac: Fraction of data to draw per resample.
         rng: Optional random generator.
@@ -111,7 +125,7 @@ def stability_score(
     for _ in range(n_resamples):
         idx = rng.choice(n, size=max(2, int(subsample_frac * n)), replace=False)
         idx.sort()
-        result = clusterer_factory().fit(X[idx])  # type: ignore[attr-defined]
+        result = clusterer_factory().fit(X[idx])
         runs.append((idx, np.asarray(result.assignments, dtype=np.intp)))
 
     aris: list[float] = []
@@ -178,10 +192,10 @@ def variation_of_information(y_true: NDArray[np.intp], y_pred: NDArray[np.intp])
         raise ValueError("y_true and y_pred must be non-empty")
 
     n = y_true.shape[0]
-    _, inverse_true = np.unique(y_true, return_inverse=True)
+    labels_true, inverse_true = np.unique(y_true, return_inverse=True)
     labels_pred, inverse_pred = np.unique(y_pred, return_inverse=True)
 
-    contingency = np.zeros((len(np.unique(y_true)), len(labels_pred)), dtype=np.float64)
+    contingency = np.zeros((len(labels_true), len(labels_pred)), dtype=np.float64)
     np.add.at(contingency, (inverse_true, inverse_pred), 1)
     contingency /= n
 
@@ -223,19 +237,18 @@ def misclassification_error(y_true: NDArray[np.intp], y_pred: NDArray[np.intp]) 
 
 def run_methods(
     X: NDArray[np.float64],
-    methods: list[dict[str, object]],
+    methods: Sequence[MethodSpec],
     n_inits: int = 20,
     base_seed: int = 0,
 ) -> dict[str, ClusterResult]:
     """Fit several clustering methods, keeping the best-of-``n_inits`` run.
 
-    Each entry in ``methods`` is a dict with keys ``"name"``, ``"cls"``, and ``"kwargs"`` (passed
-    to the constructor). For each method the algorithm is re-initialised ``n_inits`` times (via
-    ``random_state``) and the run with the lowest objective is kept.
+    For each method the algorithm is re-initialised ``n_inits`` times (via ``random_state``) and
+    the run with the lowest objective is kept.
 
     Args:
         X: Data array.
-        methods: List of method specifications.
+        methods: Method specifications; see :class:`MethodSpec`.
         n_inits: Number of random restarts per method.
         base_seed: Base random seed (incremented per restart).
 
@@ -245,17 +258,16 @@ def run_methods(
     results: dict[str, ClusterResult] = {}
 
     for spec in methods:
-        name = str(spec["name"])
         cls = spec["cls"]
-        kwargs = dict(spec.get("kwargs", {}))  # type: ignore[call-overload]
+        kwargs = spec.get("kwargs", {})
 
         best: ClusterResult | None = None
         for trial in range(n_inits):
-            result: ClusterResult = cls(**{**kwargs, "random_state": base_seed + trial}).fit(X)  # type: ignore[operator]
+            result = cls(**{**kwargs, "random_state": base_seed + trial}).fit(X)
             if best is None or result.objective < best.objective:
                 best = result
 
         assert best is not None
-        results[name] = best
+        results[spec["name"]] = best
 
     return results
