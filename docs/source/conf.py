@@ -19,7 +19,10 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns: list[str] = []
+
+# sphinx-apidoc emits modules.rst as an alternative root; index.rst points at api/geomexp
+# directly, so building it would only warn about a document outside every toctree.
+exclude_patterns: list[str] = ["api/modules.rst"]
 
 html_theme = "furo"
 html_static_path = ["_static"]
@@ -33,3 +36,12 @@ intersphinx_mapping = {
 
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
+
+# Every package __init__ re-exports its subpackages' public names via __all__. Without this,
+# autodoc documents each class once where it is defined and again under every package that
+# re-exports it, producing duplicate object descriptions and ambiguous cross-references.
+autodoc_default_options = {"ignore-module-all": True}
+
+# Render "Attributes:" sections as :ivar: fields rather than standalone attribute directives,
+# which would otherwise collide with the dataclass fields autodoc documents in their own right.
+napoleon_use_ivar = True
