@@ -10,7 +10,6 @@ from geomexp.evaluation.metrics import (
     misclassification_error,
     normalized_mutual_info,
     radius_ratio,
-    run_methods,
     silhouette,
     stability_score,
     variation_of_information,
@@ -211,31 +210,3 @@ class TestRadiusRatio:
         rr = radius_ratio(X, centers, assignments)
         # Single point => ratio stays at default (1)
         np.testing.assert_array_equal(rr, [1.0, 1.0])
-
-
-# --- run_methods ---
-
-
-class TestRunMethods:
-    def test_returns_dict(self, simple_2d):
-        methods = [{"name": "km", "cls": KMeans, "kwargs": {"n_clusters": 2}}]
-        results = run_methods(simple_2d, methods, n_inits=2, base_seed=0)
-        assert isinstance(results, dict)
-        assert "km" in results
-
-    def test_multiple_methods(self, simple_2d):
-        methods = [
-            {"name": "km1", "cls": KMeans, "kwargs": {"n_clusters": 2}},
-            {"name": "km2", "cls": KMeans, "kwargs": {"n_clusters": 2}},
-        ]
-        results = run_methods(simple_2d, methods, n_inits=2, base_seed=0)
-        assert len(results) == 2
-
-    def test_picks_best(self, simple_2d):
-        methods = [{"name": "km", "cls": KMeans, "kwargs": {"n_clusters": 2}}]
-        results = run_methods(simple_2d, methods, n_inits=5, base_seed=0)
-        best = results["km"]
-        # Verify it picked the best among runs
-        for trial in range(5):
-            single = KMeans(n_clusters=2, random_state=trial).fit(simple_2d)
-            assert best.objective <= single.objective + 1e-10

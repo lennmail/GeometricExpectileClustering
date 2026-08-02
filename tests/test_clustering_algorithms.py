@@ -339,3 +339,64 @@ class TestGEC:
         result = gec.fit(high_dim_data)
         assert result.assignments.shape == (60,)
         assert result.centers.shape == (3, 10)
+
+
+class TestRandomStateSemantics:
+    """random_state=None must be nondeterministic; an explicit seed must be reproducible."""
+
+    @staticmethod
+    def _rng_key(model):
+        """Fingerprint the RNG the last restart ran with."""
+        return tuple(model._rng.get_state()[1][:4])
+
+    def test_none_does_not_fall_back_to_a_fixed_seed(self, simple_2d):
+        """None used to be silently treated as seed 0, making every run identical."""
+        keys = set()
+        for _ in range(5):
+            model = GeometricExpectileClustering(n_clusters=2, index_radius=0.5, n_init=1)
+            model.fit(simple_2d)
+            keys.add(self._rng_key(model))
+        assert len(keys) > 1
+
+    def test_explicit_seed_uses_that_seed(self, simple_2d):
+        first = GeometricExpectileClustering(
+            n_clusters=2, index_radius=0.5, n_init=1, random_state=7
+        )
+        second = GeometricExpectileClustering(
+            n_clusters=2, index_radius=0.5, n_init=1, random_state=7
+        )
+        first.fit(simple_2d)
+        second.fit(simple_2d)
+        assert self._rng_key(first) == self._rng_key(second)
+
+    def test_explicit_seed_is_reproducible(self, simple_2d):
+        def run():
+            return GeometricExpectileClustering(
+                n_clusters=2, index_radius=0.5, n_init=2, random_state=7
+            ).fit(simple_2d)
+
+        first, second = run(), run()
+        np.testing.assert_array_equal(first.assignments, second.assignments)
+        np.testing.assert_allclose(first.centers, second.centers)
+
+
+class TestKMeansNInit:
+    def test_default_is_single_run(self):
+        assert KMeans(n_clusters=2).n_init == 1
+
+    def test_rejects_invalid(self):
+        with pytest.raises(ValueError, match="n_init"):
+            KMeans(n_clusters=2, n_init=0)
+
+    def test_picks_best_of_restarts(self, simple_2d):
+        best = KMeans(n_clusters=2, n_init=5, random_state=0).fit(simple_2d)
+        for trial in range(5):
+            single = KMeans(n_clusters=2, random_state=trial).fit(simple_2d)
+            assert best.objective <= single.objective + 1e-10
+
+    def test_single_init_matches_plain_fit(self, well_separated_2d):
+        """n_init=1 must reproduce the pre-existing single-run behaviour exactly."""
+        a = KMeans(n_clusters=3, random_state=42).fit(well_separated_2d)
+        b = KMeans(n_clusters=3, n_init=1, random_state=42).fit(well_separated_2d)
+        np.testing.assert_array_equal(a.assignments, b.assignments)
+        np.testing.assert_allclose(a.centers, b.centers)

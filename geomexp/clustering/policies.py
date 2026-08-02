@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from geomexp.clustering.geometry import EuclideanGeometry
+from geomexp.utils.sampling import draw_distinct_indices
 
 if TYPE_CHECKING:
     from geomexp.clustering.geometry import HilbertGeometry
@@ -98,7 +99,8 @@ class RandomReinitRule(EmptyClusterRule):
     """Reinitialize each empty cluster center to a randomly chosen data point.
 
     Index vectors for reinitialized clusters are reset to zero (symmetric). This is the simplest
-    and most common approach.
+    and most common approach. Points are drawn without repetition, so no two empty clusters
+    receive the same center.
     """
 
     def __call__(
@@ -111,12 +113,11 @@ class RandomReinitRule(EmptyClusterRule):
     ) -> tuple[np.ndarray, np.ndarray]:
         centers = centers.copy()
         indices = indices.copy()
-        n_clusters = len(centers)
 
-        for k in range(n_clusters):
-            if np.sum(assignments == k) == 0:
-                centers[k] = X[rng.choice(len(X))]
-                indices[k] = 0
+        empty = [k for k in range(len(centers)) if np.sum(assignments == k) == 0]
+        for k, idx in zip(empty, draw_distinct_indices(len(X), len(empty), rng), strict=True):
+            centers[k] = X[idx]
+            indices[k] = 0
 
         return centers, indices
 
@@ -127,6 +128,9 @@ class FarthestPointRule(EmptyClusterRule):
     Distances are measured in the Hilbert geometry provided at construction (Euclidean by default).
     This tends to spread clusters apart and can help escape degenerate local optima more
     aggressively than random reinitialization.
+
+    When several clusters are empty they are seeded with successively farther points, so that no
+    two of them receive the same center.
     """
 
     def __init__(self, geometry: HilbertGeometry | None = None) -> None:
@@ -147,14 +151,16 @@ class FarthestPointRule(EmptyClusterRule):
     ) -> tuple[np.ndarray, np.ndarray]:
         centers = centers.copy()
         indices = indices.copy()
-        n_clusters = len(centers)
 
-        for k in range(n_clusters):
-            if np.sum(assignments == k) == 0:
-                assigned_centers = centers[assignments]
-                dists = self._geometry.norm(X - assigned_centers)
-                farthest = int(np.argmax(dists))
-                centers[k] = X[farthest]
-                indices[k] = 0
+        empty = [k for k in range(len(centers)) if np.sum(assignments == k) == 0]
+        if not empty:
+            return centers, indices
+
+        dists = np.array(self._geometry.norm(X - centers[assignments]), dtype=np.float64)
+        for k in empty:
+            farthest = int(np.argmax(dists))
+            centers[k] = X[farthest]
+            indices[k] = 0
+            dists[farthest] = -np.inf
 
         return centers, indices

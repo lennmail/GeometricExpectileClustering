@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from geomexp.clustering.geometry import EuclideanGeometry
+from geomexp.utils.validation import validate_direction_matrix, validate_direction_vector
 
 if TYPE_CHECKING:
     from geomexp.clustering.geometry import HilbertGeometry
@@ -93,10 +94,10 @@ class GlobalIndexStrategy(IndexStrategy):
             geometry: Hilbert space geometry for normalization. ``None`` uses Euclidean.
 
         Raises:
-            ValueError: If direction is the zero vector.
+            ValueError: If direction is not 1-D or is the zero vector.
         """
         self._geometry: HilbertGeometry = geometry or EuclideanGeometry()
-        direction = np.asarray(direction, dtype=np.float64)
+        direction = validate_direction_vector(direction)
         norm = float(self._geometry.norm(direction))
         if norm < 1e-12:
             raise ValueError("Direction must be non-zero")
@@ -149,9 +150,12 @@ class ClusterSpecificIndexStrategy(IndexStrategy):
             directions: Array of shape ``(n_clusters, n_features)``. Each row is normalised
                 to :math:`\\|u_k\\|_H = r`; zero rows yield :math:`u_k = 0`.
             geometry: Hilbert space geometry for normalization. ``None`` uses Euclidean.
+
+        Raises:
+            ValueError: If ``directions`` is not 2-D.
         """
         self._geometry: HilbertGeometry = geometry or EuclideanGeometry()
-        directions = np.asarray(directions, dtype=np.float64)
+        directions = validate_direction_matrix(directions)
         norms = self._geometry.norm(directions)
         self._is_nonzero = norms > 1e-12
         safe_norms = np.where(self._is_nonzero, norms, 1)

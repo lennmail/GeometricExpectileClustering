@@ -60,12 +60,14 @@ The default geometry is Euclidean. For functional data on a grid, pass quadratur
 ```python
 from geomexp.visualization import PlotStyle, ClusterVisualizer
 
-style = PlotStyle(figsize=(6, 4), font_size=10, contour_color="blue")
+style = PlotStyle(figsize=(6, 4), fontsize=10, contour_color="blue")
 viz = ClusterVisualizer(style)
-viz.plot_clusters(X, result)
+viz.plot_cluster_assignments(X, result)
 ```
 
 `PlotStyle` centralises all visual parameters (colors, sizes, fonts) so that figures in a study share a uniform look. `ClusterVisualizer` provides methods for scatter plots, decision boundaries, density contours, and expectile loss curves.
+
+`PlotStyle` renders text through LaTeX by default, which requires a working LaTeX installation. Pass `use_latex=False` to fall back to matplotlib's built-in text rendering.
 
 ## Implementing your own clustering algorithm
 

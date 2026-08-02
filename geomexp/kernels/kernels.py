@@ -12,6 +12,7 @@ import numpy as np
 from scipy.special import gamma, kv
 
 from geomexp.clustering.clustering_base import BaseClusterer, ClusterResult
+from geomexp.utils.sampling import draw_distinct_indices
 from geomexp.utils.validation import (
     validate_index_radius,
     validate_positive_float,
@@ -188,49 +189,6 @@ def _kmeanspp_feature_space(
     return init_indices
 
 
-def _multi_restart_loop(
-    clusterer: BaseClusterer,
-    X: np.ndarray,
-    n_init: int,
-    init_fn: object,
-    iteration_fn: object,
-    objective_fn: object,
-    convergence_fn: object,
-    extract_fn: object,
-) -> ClusterResult:
-    """Run a multi-restart loop, returning the result with the lowest objective.
-
-    This is a shared helper for :class:`KernelKMeans` and
-    :class:`KernelGeometricExpectileClustering`.
-    """
-    best_result: ClusterResult | None = None
-    base_seed = clusterer.random_state if clusterer.random_state is not None else 0
-
-    for trial in range(n_init):
-        clusterer._rng = np.random.RandomState(base_seed + trial)
-        state = init_fn(X)  # type: ignore[operator]
-
-        obj_old = objective_fn(X, state)  # type: ignore[operator]
-        converged = False
-        n_iter = 0
-
-        for n_iter in range(clusterer.max_iter):  # noqa: B007
-            state = iteration_fn(X, state)  # type: ignore[operator]
-            obj_new = objective_fn(X, state)  # type: ignore[operator]
-
-            if abs(obj_old - obj_new) <= clusterer.tol or convergence_fn(state):  # type: ignore[operator]
-                converged = True
-                break
-            obj_old = obj_new
-
-        result = extract_fn(state, obj_new, n_iter + 1, converged)  # type: ignore[operator]
-        if best_result is None or result.objective < best_result.objective:
-            best_result = result
-
-    assert best_result is not None
-    return best_result
-
-
 class KernelKMeans(BaseClusterer):
     """Kernel K-means clustering (dual representation).
 
@@ -251,13 +209,17 @@ class KernelKMeans(BaseClusterer):
 
     With a linear kernel this recovers standard K-means.
 
+    Because the feature map has no explicit form, ``ClusterResult.centers`` holds the dual weight
+    vectors :math:`\\beta_k` of shape ``(n_clusters, n_samples)`` rather than points in input
+    space; the centroid is :math:`c_k = \\sum_j \\beta_{kj} \\varphi(X_j)`.
+
     Attributes:
         n_clusters: Number of clusters.
         kernel: Kernel function.
         n_init: Number of random restarts (best result is kept).
         max_iter: Maximum number of iterations.
         tol: Convergence tolerance.
-        random_state: Random seed.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -286,7 +248,7 @@ class KernelKMeans(BaseClusterer):
             n_init: Number of independent restarts. The run with the lowest objective is returned.
             max_iter: Maximum number of iterations per restart.
             tol: Convergence tolerance.
-            random_state: Random seed.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
         """
         super().__init__(
             n_clusters=n_clusters, max_iter=max_iter, tol=tol, random_state=random_state
@@ -307,16 +269,7 @@ class KernelKMeans(BaseClusterer):
         """
         X = self._validate_input(X)
         self._gram = self.kernel.gram_matrix(X)
-        return _multi_restart_loop(
-            self,
-            X,
-            self.n_init,
-            self._initialize,
-            self._fit_iteration,
-            self._compute_objective,
-            self._additional_convergence_check,
-            self._extract_result,
-        )
+        return self._fit_best_of_restarts(X, self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize weight vectors via k-means++ in feature space."""
@@ -359,12 +312,13 @@ class KernelKMeans(BaseClusterer):
         assert isinstance(assignments, np.ndarray)
 
         n = self._gram.shape[0]
-        if any(np.sum(assignments == k) == 0 for k in range(self.n_clusters)):
+        empty = [k for k in range(self.n_clusters) if np.sum(assignments == k) == 0]
+        if empty:
             cw = center_weights.copy()
-            for k in range(self.n_clusters):
-                if np.sum(assignments == k) == 0:
-                    cw[k] = 0
-                    cw[k, self._rng.choice(n)] = 1
+            draws = draw_distinct_indices(n, len(empty), self._rng)
+            for k, idx in zip(empty, draws, strict=True):
+                cw[k] = 0
+                cw[k, idx] = 1
             state["center_weights"] = cw
             state["assignments"] = self._assign_kernel(self._gram, cw)
             assignments = state["assignments"]
@@ -424,7 +378,6 @@ class KernelKMeans(BaseClusterer):
             objective=objective,
             n_iterations=n_iterations,
             converged=converged,
-            metadata={"center_weights": center_weights},
         )
 
 
@@ -449,6 +402,10 @@ class KernelGeometricExpectileClustering(BaseClusterer):
 
     Setting :math:`r = 0` recovers kernel K-means.
 
+    As for :class:`KernelKMeans`, ``ClusterResult.centers`` holds the dual centroid weights
+    :math:`\\beta_k`; the dual index weights :math:`\\alpha_k` are returned under
+    ``ClusterResult.metadata["index_weights"]``.
+
     Attributes:
         n_clusters: Number of clusters.
         kernel: Kernel function.
@@ -458,7 +415,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         tol: Convergence tolerance on objective change.
         center_lr: Learning rate for gradient descent on centroid weights.
         center_steps: Number of gradient steps per centroid update.
-        random_state: Random seed.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -495,7 +452,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             tol: Convergence tolerance on objective change.
             center_lr: Learning rate for gradient descent on centroid weight vectors.
             center_steps: Number of gradient steps per centroid update.
-            random_state: Random seed for reproducibility.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
         Raises:
             ValueError: If parameters are invalid.
@@ -528,16 +485,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         X = self._validate_input(X)
         self._gram = self.kernel.gram_matrix(X)
         self._diag_K = np.diag(self._gram)
-        return _multi_restart_loop(
-            self,
-            X,
-            self.n_init,
-            self._initialize,
-            self._fit_iteration,
-            self._compute_objective,
-            self._additional_convergence_check,
-            self._extract_result,
-        )
+        return self._fit_best_of_restarts(X, self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize centroid weights via k-means++ in feature space, index weights to zero."""
@@ -555,6 +503,24 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             "prev_assignments": None,
         }
 
+    def _residual_norms(
+        self, center_weights_k: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute residual norms for one cluster, without touching the index vector.
+
+        Args:
+            center_weights_k: Centroid weight vector :math:`\\beta_k` of shape ``(n,)``.
+
+        Returns:
+            Tuple ``(Kb, d_sq, d)`` where :math:`Kb = K\\beta_k`, :math:`d_{ik}^2` is the squared
+            residual norm, and :math:`d_{ik}` its square root. ``Kb`` is returned so that callers
+            needing the index inner product can reuse it.
+        """
+        Kb = self._gram @ center_weights_k
+        d_sq = self._diag_K - 2 * Kb + float(center_weights_k @ Kb)
+        np.maximum(d_sq, 0, out=d_sq)
+        return Kb, d_sq, np.sqrt(d_sq)
+
     def _residual_quantities(
         self, center_weights_k: np.ndarray, index_weights_k: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -569,13 +535,9 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             residual norm, :math:`d_{ik}` the norm, and :math:`p_{ik}` the index-residual inner
             product.
         """
-        Kb = self._gram @ center_weights_k
-        bKb = float(center_weights_k @ Kb)
-        d_sq = self._diag_K - 2 * Kb + bKb
-        np.maximum(d_sq, 0, out=d_sq)
-
+        Kb, d_sq, d = self._residual_norms(center_weights_k)
         Ka = self._gram @ index_weights_k
-        return d_sq, np.sqrt(d_sq), Ka - float(index_weights_k @ Kb)
+        return d_sq, d, Ka - float(index_weights_k @ Kb)
 
     def _assign_by_distance(self, center_weights: np.ndarray) -> np.ndarray:
         """Assign points by squared feature-space distance (used for initialisation)."""
@@ -627,15 +589,16 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         assert isinstance(center_weights, np.ndarray)
         assert isinstance(index_weights, np.ndarray)
 
-        if not any(np.sum(assignments == k) == 0 for k in range(self.n_clusters)):
+        empty = [k for k in range(self.n_clusters) if np.sum(assignments == k) == 0]
+        if not empty:
             return state
 
         cw, iw = center_weights.copy(), index_weights.copy()
-        for k in range(self.n_clusters):
-            if np.sum(assignments == k) == 0:
-                cw[k] = 0
-                cw[k, self._rng.choice(self._gram.shape[0])] = 1
-                iw[k] = 0
+        draws = draw_distinct_indices(self._gram.shape[0], len(empty), self._rng)
+        for k, idx in zip(empty, draws, strict=True):
+            cw[k] = 0
+            cw[k, idx] = 1
+            iw[k] = 0
 
         state["center_weights"] = cw
         state["index_weights"] = iw
@@ -659,10 +622,11 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         for k in range(self.n_clusters):
             mask = assignments == k
             n_k = int(np.sum(mask))
-            if n_k <= 1:
-                if n_k == 1:
-                    new_cw[k] = 0
-                    new_cw[k, mask] = 1
+            if n_k == 0:
+                continue
+            if n_k == 1:
+                new_cw[k] = 0
+                new_cw[k, mask] = 1
                 continue
 
             beta = new_cw[k].copy()
@@ -684,13 +648,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         weight vector :math:`g_i = (\\beta - e_i)(1 + p_i / 2d_i) - d_i \\alpha / 2`. This
         method returns the mean over cluster members.
         """
-        Kb = self._gram @ beta
-        d_sq = self._diag_K - 2 * Kb + float(beta @ Kb)
-        np.maximum(d_sq, 0, out=d_sq)
-        d = np.sqrt(d_sq)
-
-        Ka = self._gram @ alpha
-        p = Ka - float(alpha @ Kb)
+        _, d, p = self._residual_quantities(beta, alpha)
 
         active = mask & (d > 1e-12)
         if not np.any(active):
@@ -724,7 +682,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             if not np.any(mask):
                 continue
 
-            _, d, _ = self._residual_quantities(center_weights[k], index_weights[k])
+            _, _, d = self._residual_norms(center_weights[k])
             delta = np.zeros(self._gram.shape[0])
             delta[mask] = d[mask]
             delta -= float(np.sum(d[mask])) * center_weights[k]
@@ -782,5 +740,5 @@ class KernelGeometricExpectileClustering(BaseClusterer):
             objective=objective,
             n_iterations=n_iterations,
             converged=converged,
-            metadata={"center_weights": center_weights, "index_weights": index_weights},
+            metadata={"index_weights": index_weights},
         )

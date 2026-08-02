@@ -287,7 +287,8 @@ class TestKernelKMeans:
             random_state=42,
         )
         result = km.fit(simple_2d)
-        assert "center_weights" in result.metadata
+        assert result.centers.shape == (2, len(simple_2d))
+        assert result.metadata is None
 
 
 # --- KernelGeometricExpectileClustering ---
@@ -332,7 +333,7 @@ class TestKernelGEC:
             random_state=42,
         )
         result = kgec.fit(simple_2d)
-        assert "center_weights" in result.metadata
+        assert result.centers.shape == (2, len(simple_2d))
         assert "index_weights" in result.metadata
 
     def test_deterministic(self, simple_2d):
@@ -395,5 +396,5 @@ class TestKernelGEC:
         )
         result = kgec.fit(simple_2d)
         assert result.assignments.shape == (30,)
-        assert result.metadata["center_weights"].shape == (2, 30)
+        assert result.centers.shape == (2, 30)
         assert result.metadata["index_weights"].shape == (2, 30)

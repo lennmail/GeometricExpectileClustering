@@ -22,6 +22,8 @@ wheels/
 # editors
 .vscode/
 
+# OS
+.DS_Store
 
 plots/
 results/

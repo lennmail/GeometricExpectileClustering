@@ -4,7 +4,12 @@ from geomexp.clustering.clustering_algorithms import (
     GeometricExpectileClustering,
     KMeans,
 )
-from geomexp.clustering.clustering_base import BaseClusterer, ClusterResult, expectile_loss
+from geomexp.clustering.clustering_base import (
+    BaseClusterer,
+    ClusterResult,
+    IterativeClusterer,
+    expectile_loss,
+)
 from geomexp.clustering.geometry import (
     EuclideanGeometry,
     GramGeometry,
@@ -17,6 +22,14 @@ from geomexp.clustering.index_strategies import (
     CustomIndexStrategy,
     GlobalIndexStrategy,
     IndexStrategy,
+)
+from geomexp.clustering.policies import (
+    EmptyClusterRule,
+    FarthestPointRule,
+    LowestIndexTieBreak,
+    RandomReinitRule,
+    RandomTieBreak,
+    TieBreakRule,
 )
 from geomexp.kernels.kernels import (
     Kernel,
@@ -34,20 +47,27 @@ __all__ = [
     "ClusterResult",
     "ClusterSpecificIndexStrategy",
     "CustomIndexStrategy",
+    "EmptyClusterRule",
     "EuclideanGeometry",
+    "FarthestPointRule",
     "GeometricExpectileClustering",
     "GlobalIndexStrategy",
     "GramGeometry",
     "HilbertGeometry",
     "IndexStrategy",
+    "IterativeClusterer",
     "KMeans",
     "Kernel",
     "KernelGeometricExpectileClustering",
     "KernelKMeans",
     "LinearKernel",
+    "LowestIndexTieBreak",
     "MaternKernel",
     "PolynomialKernel",
     "RBFKernel",
+    "RandomReinitRule",
+    "RandomTieBreak",
+    "TieBreakRule",
     "WeightedEuclideanGeometry",
     "expectile_loss",
 ]

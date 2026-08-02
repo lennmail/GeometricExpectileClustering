@@ -50,7 +50,7 @@ jobs:
           echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${TOTAL}%\",\"color\":\"${COLOR}\"}" > docs/build/html/coverage.json
 
       - name: Build Sphinx docs
-        run: uv run sphinx-build -b html docs/source docs/build/html
+        run: uv run sphinx-build -b html -W --keep-going docs/source docs/build/html
 
       - name: Disable Jekyll
         run: touch docs/build/html/.nojekyll

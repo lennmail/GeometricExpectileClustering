@@ -49,9 +49,10 @@ class KMeans(IterativeClusterer):
 
     Attributes:
         n_clusters: Number of clusters to form.
+        n_init: Number of random restarts (best result is kept).
         max_iter: Maximum number of iterations.
         tol: Convergence tolerance on objective change.
-        random_state: Random seed for reproducibility.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -65,13 +66,42 @@ class KMeans(IterativeClusterer):
     def __init__(
         self,
         n_clusters: int,
+        n_init: int = 1,
         max_iter: int = 100,
         tol: float = 1e-4,
         random_state: int | None = None,
     ) -> None:
+        """Initialize the K-means clusterer.
+
+        Args:
+            n_clusters: Number of clusters to form. Must be positive.
+            n_init: Number of independent restarts with different random seeds. The run with the
+                lowest objective is returned. Defaults to a single run, unlike
+                :class:`GeometricExpectileClustering`, whose non-convex objective benefits more
+                from restarts.
+            max_iter: Maximum number of iterations per restart. Must be positive.
+            tol: Convergence tolerance on objective change. Must be non-negative.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
+
+        Raises:
+            ValueError: If parameters are invalid.
+        """
+        validate_positive_int(n_init, "n_init")
         super().__init__(
             n_clusters=n_clusters, max_iter=max_iter, tol=tol, random_state=random_state
         )
+        self.n_init = n_init
+
+    def fit(self, X: np.ndarray) -> ClusterResult:
+        """Fit K-means, keeping the best of ``n_init`` random restarts.
+
+        Args:
+            X: Data array of shape ``(n_samples, n_features)``.
+
+        Returns:
+            ClusterResult from the best restart.
+        """
+        return self._fit_best_of_restarts(self._validate_input(X), self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize state with random centers and Euclidean assignment."""
@@ -170,7 +200,7 @@ class GeometricExpectileClustering(BaseClusterer):
         tol: Convergence tolerance on objective change.
         center_lr: Learning rate for gradient descent on centers.
         center_steps: Number of gradient steps per centroid update.
-        random_state: Random seed.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
     Example:
         >>> import numpy as np
@@ -221,7 +251,7 @@ class GeometricExpectileClustering(BaseClusterer):
                 the center update uses the Hilbert gradient (natural gradient), this rate is
                 independent of grid resolution even for functional data.
             center_steps: Number of gradient steps per centroid update. Must be positive.
-            random_state: Random seed for reproducibility.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
         Raises:
             ValueError: If parameters are invalid.
@@ -256,34 +286,7 @@ class GeometricExpectileClustering(BaseClusterer):
         Returns:
             ClusterResult from the best restart.
         """
-        X = self._validate_input(X)
-
-        best_result: ClusterResult | None = None
-        base_seed = self.random_state if self.random_state is not None else 0
-
-        for trial in range(self.n_init):
-            self._rng = np.random.RandomState(base_seed + trial)
-            state = self._initialize(X)
-
-            obj_new = obj_old = self._compute_objective(X, state)
-            converged = False
-            n_iter = 0
-
-            for n_iter in range(self.max_iter):  # noqa: B007
-                state = self._fit_iteration(X, state)
-                obj_new = self._compute_objective(X, state)
-
-                if abs(obj_old - obj_new) <= self.tol or self._additional_convergence_check(state):
-                    converged = True
-                    break
-                obj_old = obj_new
-
-            result = self._extract_result(state, obj_new, n_iter + 1, converged)
-            if best_result is None or result.objective < best_result.objective:
-                best_result = result
-
-        assert best_result is not None
-        return best_result
+        return self._fit_best_of_restarts(self._validate_input(X), self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize centers, index vectors, and assignments.
@@ -379,9 +382,10 @@ class GeometricExpectileClustering(BaseClusterer):
             mask = assignments == k
             cluster_points = X[mask]
 
-            if len(cluster_points) <= 1:
-                if len(cluster_points) == 1:
-                    new_centers[k] = cluster_points[0]
+            if len(cluster_points) == 0:
+                continue
+            if len(cluster_points) == 1:
+                new_centers[k] = cluster_points[0]
                 continue
 
             c_k = new_centers[k].copy()

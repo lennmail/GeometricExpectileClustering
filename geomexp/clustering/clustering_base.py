@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from geomexp.utils.sampling import draw_distinct_indices
 from geomexp.utils.validation import (
     validate_data_array,
     validate_n_clusters,
@@ -96,7 +97,7 @@ class BaseClusterer(ABC):
         n_clusters: Number of clusters to form.
         max_iter: Maximum number of iterations to perform.
         tol: Convergence tolerance for objective function change.
-        random_state: Random seed for reproducibility.
+        random_state: Random seed for reproducibility; ``None`` draws from system entropy.
     """
 
     def __init__(
@@ -112,7 +113,7 @@ class BaseClusterer(ABC):
             n_clusters: Number of clusters to form. Must be positive.
             max_iter: Maximum number of iterations. Must be positive.
             tol: Convergence tolerance on objective change. Must be non-negative.
-            random_state: Random seed for reproducibility.
+            random_state: Random seed for reproducibility; ``None`` draws from system entropy.
 
         Raises:
             TypeError: If ``n_clusters`` or ``max_iter`` are not integers.
@@ -131,10 +132,6 @@ class BaseClusterer(ABC):
     def fit(self, X: np.ndarray) -> ClusterResult:
         """Fit the clustering algorithm to data.
 
-        The outer loop follows Algorithm 1 from the thesis: iterate until the objective decrease
-        falls below ``tol``, an additional convergence criterion is met, or ``max_iter`` iterations
-        are reached.
-
         Args:
             X: Data array of shape ``(n_samples, n_features)``.
 
@@ -144,23 +141,65 @@ class BaseClusterer(ABC):
         Raises:
             ValueError: If ``X`` has fewer samples than ``n_clusters`` or invalid shape.
         """
-        X = self._validate_input(X)
-        state = self._initialize(X)
+        return self._fit_single(self._validate_input(X))
 
-        obj_new = obj_old = self._compute_objective(X, state)
+    def _fit_single(self, X: np.ndarray) -> ClusterResult:
+        """Run one full optimisation from the current random state.
+
+        The loop follows Algorithm 1 from the thesis: iterate until the objective decrease falls
+        below ``tol``, an additional convergence criterion is met, or ``max_iter`` iterations are
+        reached.
+
+        Args:
+            X: Validated data array of shape ``(n_samples, n_features)``.
+
+        Returns:
+            ClusterResult for this run.
+        """
+        state = self._initialize(X)
+        objective = self._compute_objective(X, state)
         converged = False
         n_iter = 0
 
-        for n_iter in range(self.max_iter):  # noqa: B007
+        while n_iter < self.max_iter:
+            n_iter += 1
             state = self._fit_iteration(X, state)
-            obj_new = self._compute_objective(X, state)
+            previous, objective = objective, self._compute_objective(X, state)
 
-            if abs(obj_old - obj_new) <= self.tol or self._additional_convergence_check(state):
+            if abs(previous - objective) <= self.tol or self._additional_convergence_check(state):
                 converged = True
                 break
-            obj_old = obj_new
 
-        return self._extract_result(state, obj_new, n_iter + 1, converged)
+        return self._extract_result(state, objective, n_iter, converged)
+
+    def _fit_best_of_restarts(self, X: np.ndarray, n_init: int) -> ClusterResult:
+        """Run ``n_init`` independent restarts and keep the one with the lowest objective.
+
+        Restart ``i`` uses seed ``random_state + i``. When ``random_state`` is ``None`` the base
+        seed is drawn from system entropy, so the run is not reproducible -- matching the
+        behaviour of ``random_state=None`` elsewhere in the library and in scikit-learn.
+
+        Args:
+            X: Validated data array of shape ``(n_samples, n_features)``.
+            n_init: Number of restarts.
+
+        Returns:
+            ClusterResult from the best restart.
+        """
+        base_seed = self.random_state
+        if base_seed is None:
+            base_seed = int(np.random.RandomState().randint(2**31))
+
+        best_result: ClusterResult | None = None
+
+        for trial in range(n_init):
+            self._rng = np.random.RandomState(base_seed + trial)
+            result = self._fit_single(X)
+            if best_result is None or result.objective < best_result.objective:
+                best_result = result
+
+        assert best_result is not None
+        return best_result
 
     def _additional_convergence_check(self, state: dict[str, object]) -> bool:
         """Hook for subclass-specific convergence criteria.
@@ -257,18 +296,19 @@ class IterativeClusterer(BaseClusterer):
     def _handle_empty_clusters_in_state(
         self, X: np.ndarray, state: dict[str, object]
     ) -> dict[str, object]:
-        """Handle empty clusters by reinitialising them to random data points."""
+        """Handle empty clusters by reinitialising them to distinct random data points."""
         assignments = state["assignments"]
         centers = state["centers"]
         assert isinstance(assignments, np.ndarray)
         assert isinstance(centers, np.ndarray)
 
-        if not any(np.sum(assignments == k) == 0 for k in range(self.n_clusters)):
+        empty = [k for k in range(self.n_clusters) if np.sum(assignments == k) == 0]
+        if not empty:
             return state
 
-        for k in range(self.n_clusters):
-            if np.sum(assignments == k) == 0:
-                centers[k] = X[self._rng.choice(len(X))]
+        draws = draw_distinct_indices(len(X), len(empty), self._rng)
+        for k, idx in zip(empty, draws, strict=True):
+            centers[k] = X[idx]
 
         state["centers"] = centers
         state["assignments"] = self._assign_to_nearest_centers(X, centers)

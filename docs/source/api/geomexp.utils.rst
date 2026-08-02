@@ -4,6 +4,14 @@ geomexp.utils package
 Submodules
 ----------
 
+geomexp.utils.sampling module
+-----------------------------
+
+.. automodule:: geomexp.utils.sampling
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 geomexp.utils.validation module
 -------------------------------
 
