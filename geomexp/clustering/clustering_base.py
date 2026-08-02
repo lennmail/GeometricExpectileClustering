@@ -131,10 +131,6 @@ class BaseClusterer(ABC):
     def fit(self, X: np.ndarray) -> ClusterResult:
         """Fit the clustering algorithm to data.
 
-        The outer loop follows Algorithm 1 from the thesis: iterate until the objective decrease
-        falls below ``tol``, an additional convergence criterion is met, or ``max_iter`` iterations
-        are reached.
-
         Args:
             X: Data array of shape ``(n_samples, n_features)``.
 
@@ -144,23 +140,60 @@ class BaseClusterer(ABC):
         Raises:
             ValueError: If ``X`` has fewer samples than ``n_clusters`` or invalid shape.
         """
-        X = self._validate_input(X)
-        state = self._initialize(X)
+        return self._fit_single(self._validate_input(X))
 
-        obj_new = obj_old = self._compute_objective(X, state)
+    def _fit_single(self, X: np.ndarray) -> ClusterResult:
+        """Run one full optimisation from the current random state.
+
+        The loop follows Algorithm 1 from the thesis: iterate until the objective decrease falls
+        below ``tol``, an additional convergence criterion is met, or ``max_iter`` iterations are
+        reached.
+
+        Args:
+            X: Validated data array of shape ``(n_samples, n_features)``.
+
+        Returns:
+            ClusterResult for this run.
+        """
+        state = self._initialize(X)
+        objective = self._compute_objective(X, state)
         converged = False
         n_iter = 0
 
-        for n_iter in range(self.max_iter):  # noqa: B007
+        while n_iter < self.max_iter:
+            n_iter += 1
             state = self._fit_iteration(X, state)
-            obj_new = self._compute_objective(X, state)
+            previous, objective = objective, self._compute_objective(X, state)
 
-            if abs(obj_old - obj_new) <= self.tol or self._additional_convergence_check(state):
+            if abs(previous - objective) <= self.tol or self._additional_convergence_check(state):
                 converged = True
                 break
-            obj_old = obj_new
 
-        return self._extract_result(state, obj_new, n_iter + 1, converged)
+        return self._extract_result(state, objective, n_iter, converged)
+
+    def _fit_best_of_restarts(self, X: np.ndarray, n_init: int) -> ClusterResult:
+        """Run ``n_init`` independent restarts and keep the one with the lowest objective.
+
+        Restart ``i`` uses seed ``random_state + i`` (or ``i`` when ``random_state`` is ``None``).
+
+        Args:
+            X: Validated data array of shape ``(n_samples, n_features)``.
+            n_init: Number of restarts.
+
+        Returns:
+            ClusterResult from the best restart.
+        """
+        base_seed = self.random_state if self.random_state is not None else 0
+        best_result: ClusterResult | None = None
+
+        for trial in range(n_init):
+            self._rng = np.random.RandomState(base_seed + trial)
+            result = self._fit_single(X)
+            if best_result is None or result.objective < best_result.objective:
+                best_result = result
+
+        assert best_result is not None
+        return best_result
 
     def _additional_convergence_check(self, state: dict[str, object]) -> bool:
         """Hook for subclass-specific convergence criteria.

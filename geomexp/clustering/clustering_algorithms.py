@@ -256,34 +256,7 @@ class GeometricExpectileClustering(BaseClusterer):
         Returns:
             ClusterResult from the best restart.
         """
-        X = self._validate_input(X)
-
-        best_result: ClusterResult | None = None
-        base_seed = self.random_state if self.random_state is not None else 0
-
-        for trial in range(self.n_init):
-            self._rng = np.random.RandomState(base_seed + trial)
-            state = self._initialize(X)
-
-            obj_new = obj_old = self._compute_objective(X, state)
-            converged = False
-            n_iter = 0
-
-            for n_iter in range(self.max_iter):  # noqa: B007
-                state = self._fit_iteration(X, state)
-                obj_new = self._compute_objective(X, state)
-
-                if abs(obj_old - obj_new) <= self.tol or self._additional_convergence_check(state):
-                    converged = True
-                    break
-                obj_old = obj_new
-
-            result = self._extract_result(state, obj_new, n_iter + 1, converged)
-            if best_result is None or result.objective < best_result.objective:
-                best_result = result
-
-        assert best_result is not None
-        return best_result
+        return self._fit_best_of_restarts(self._validate_input(X), self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize centers, index vectors, and assignments.

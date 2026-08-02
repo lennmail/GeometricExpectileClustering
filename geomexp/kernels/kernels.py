@@ -188,49 +188,6 @@ def _kmeanspp_feature_space(
     return init_indices
 
 
-def _multi_restart_loop(
-    clusterer: BaseClusterer,
-    X: np.ndarray,
-    n_init: int,
-    init_fn: object,
-    iteration_fn: object,
-    objective_fn: object,
-    convergence_fn: object,
-    extract_fn: object,
-) -> ClusterResult:
-    """Run a multi-restart loop, returning the result with the lowest objective.
-
-    This is a shared helper for :class:`KernelKMeans` and
-    :class:`KernelGeometricExpectileClustering`.
-    """
-    best_result: ClusterResult | None = None
-    base_seed = clusterer.random_state if clusterer.random_state is not None else 0
-
-    for trial in range(n_init):
-        clusterer._rng = np.random.RandomState(base_seed + trial)
-        state = init_fn(X)  # type: ignore[operator]
-
-        obj_old = objective_fn(X, state)  # type: ignore[operator]
-        converged = False
-        n_iter = 0
-
-        for n_iter in range(clusterer.max_iter):  # noqa: B007
-            state = iteration_fn(X, state)  # type: ignore[operator]
-            obj_new = objective_fn(X, state)  # type: ignore[operator]
-
-            if abs(obj_old - obj_new) <= clusterer.tol or convergence_fn(state):  # type: ignore[operator]
-                converged = True
-                break
-            obj_old = obj_new
-
-        result = extract_fn(state, obj_new, n_iter + 1, converged)  # type: ignore[operator]
-        if best_result is None or result.objective < best_result.objective:
-            best_result = result
-
-    assert best_result is not None
-    return best_result
-
-
 class KernelKMeans(BaseClusterer):
     """Kernel K-means clustering (dual representation).
 
@@ -307,16 +264,7 @@ class KernelKMeans(BaseClusterer):
         """
         X = self._validate_input(X)
         self._gram = self.kernel.gram_matrix(X)
-        return _multi_restart_loop(
-            self,
-            X,
-            self.n_init,
-            self._initialize,
-            self._fit_iteration,
-            self._compute_objective,
-            self._additional_convergence_check,
-            self._extract_result,
-        )
+        return self._fit_best_of_restarts(X, self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize weight vectors via k-means++ in feature space."""
@@ -528,16 +476,7 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         X = self._validate_input(X)
         self._gram = self.kernel.gram_matrix(X)
         self._diag_K = np.diag(self._gram)
-        return _multi_restart_loop(
-            self,
-            X,
-            self.n_init,
-            self._initialize,
-            self._fit_iteration,
-            self._compute_objective,
-            self._additional_convergence_check,
-            self._extract_result,
-        )
+        return self._fit_best_of_restarts(X, self.n_init)
 
     def _initialize(self, X: np.ndarray) -> dict[str, object]:
         """Initialize centroid weights via k-means++ in feature space, index weights to zero."""
