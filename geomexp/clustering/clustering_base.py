@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from geomexp.utils.sampling import draw_distinct_indices
 from geomexp.utils.validation import (
     validate_data_array,
     validate_n_clusters,
@@ -290,18 +291,19 @@ class IterativeClusterer(BaseClusterer):
     def _handle_empty_clusters_in_state(
         self, X: np.ndarray, state: dict[str, object]
     ) -> dict[str, object]:
-        """Handle empty clusters by reinitialising them to random data points."""
+        """Handle empty clusters by reinitialising them to distinct random data points."""
         assignments = state["assignments"]
         centers = state["centers"]
         assert isinstance(assignments, np.ndarray)
         assert isinstance(centers, np.ndarray)
 
-        if not any(np.sum(assignments == k) == 0 for k in range(self.n_clusters)):
+        empty = [k for k in range(self.n_clusters) if np.sum(assignments == k) == 0]
+        if not empty:
             return state
 
-        for k in range(self.n_clusters):
-            if np.sum(assignments == k) == 0:
-                centers[k] = X[self._rng.choice(len(X))]
+        draws = draw_distinct_indices(len(X), len(empty), self._rng)
+        for k, idx in zip(empty, draws, strict=True):
+            centers[k] = X[idx]
 
         state["centers"] = centers
         state["assignments"] = self._assign_to_nearest_centers(X, centers)

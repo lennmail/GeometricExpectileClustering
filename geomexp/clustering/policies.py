@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from geomexp.clustering.geometry import EuclideanGeometry
+from geomexp.utils.sampling import draw_distinct_indices
 
 if TYPE_CHECKING:
     from geomexp.clustering.geometry import HilbertGeometry
@@ -98,7 +99,8 @@ class RandomReinitRule(EmptyClusterRule):
     """Reinitialize each empty cluster center to a randomly chosen data point.
 
     Index vectors for reinitialized clusters are reset to zero (symmetric). This is the simplest
-    and most common approach.
+    and most common approach. Points are drawn without repetition, so no two empty clusters
+    receive the same center.
     """
 
     def __call__(
@@ -111,12 +113,11 @@ class RandomReinitRule(EmptyClusterRule):
     ) -> tuple[np.ndarray, np.ndarray]:
         centers = centers.copy()
         indices = indices.copy()
-        n_clusters = len(centers)
 
-        for k in range(n_clusters):
-            if np.sum(assignments == k) == 0:
-                centers[k] = X[rng.choice(len(X))]
-                indices[k] = 0
+        empty = [k for k in range(len(centers)) if np.sum(assignments == k) == 0]
+        for k, idx in zip(empty, draw_distinct_indices(len(X), len(empty), rng), strict=True):
+            centers[k] = X[idx]
+            indices[k] = 0
 
         return centers, indices
 

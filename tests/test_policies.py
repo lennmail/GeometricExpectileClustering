@@ -95,6 +95,18 @@ class TestRandomReinitRule:
         _, new_i = rule(X, assignments, centers, indices, rng)
         np.testing.assert_array_equal(new_i[1], [0.0, 0.0])
 
+    def test_multiple_empty_get_distinct_centers(self):
+        """Empty clusters draw without repetition, even from a small pool."""
+        rule = RandomReinitRule()
+        X = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
+        assignments = np.zeros(len(X), dtype=int)  # clusters 1, 2 empty
+        centers = np.zeros((3, 2))
+        indices = np.full((3, 2), 0.3)
+
+        for seed in range(25):
+            new_c, _ = rule(X, assignments, centers, indices, np.random.RandomState(seed))
+            assert not np.array_equal(new_c[1], new_c[2]), f"duplicate center at seed {seed}"
+
     def test_nonempty_untouched(self):
         rule = RandomReinitRule()
         X = np.array([[0.0, 0.0], [1.0, 1.0]])

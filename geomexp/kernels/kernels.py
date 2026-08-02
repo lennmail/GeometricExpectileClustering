@@ -12,6 +12,7 @@ import numpy as np
 from scipy.special import gamma, kv
 
 from geomexp.clustering.clustering_base import BaseClusterer, ClusterResult
+from geomexp.utils.sampling import draw_distinct_indices
 from geomexp.utils.validation import (
     validate_index_radius,
     validate_positive_float,
@@ -307,12 +308,13 @@ class KernelKMeans(BaseClusterer):
         assert isinstance(assignments, np.ndarray)
 
         n = self._gram.shape[0]
-        if any(np.sum(assignments == k) == 0 for k in range(self.n_clusters)):
+        empty = [k for k in range(self.n_clusters) if np.sum(assignments == k) == 0]
+        if empty:
             cw = center_weights.copy()
-            for k in range(self.n_clusters):
-                if np.sum(assignments == k) == 0:
-                    cw[k] = 0
-                    cw[k, self._rng.choice(n)] = 1
+            draws = draw_distinct_indices(n, len(empty), self._rng)
+            for k, idx in zip(empty, draws, strict=True):
+                cw[k] = 0
+                cw[k, idx] = 1
             state["center_weights"] = cw
             state["assignments"] = self._assign_kernel(self._gram, cw)
             assignments = state["assignments"]
@@ -580,15 +582,16 @@ class KernelGeometricExpectileClustering(BaseClusterer):
         assert isinstance(center_weights, np.ndarray)
         assert isinstance(index_weights, np.ndarray)
 
-        if not any(np.sum(assignments == k) == 0 for k in range(self.n_clusters)):
+        empty = [k for k in range(self.n_clusters) if np.sum(assignments == k) == 0]
+        if not empty:
             return state
 
         cw, iw = center_weights.copy(), index_weights.copy()
-        for k in range(self.n_clusters):
-            if np.sum(assignments == k) == 0:
-                cw[k] = 0
-                cw[k, self._rng.choice(self._gram.shape[0])] = 1
-                iw[k] = 0
+        draws = draw_distinct_indices(self._gram.shape[0], len(empty), self._rng)
+        for k, idx in zip(empty, draws, strict=True):
+            cw[k] = 0
+            cw[k, idx] = 1
+            iw[k] = 0
 
         state["center_weights"] = cw
         state["index_weights"] = iw
